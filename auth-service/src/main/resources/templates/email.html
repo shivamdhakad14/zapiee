@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Your Verification Code</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f6f8;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #333;
+        }
+
+        .email-wrapper {
+            max-width: 600px;
+            margin: 40px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .email-header {
+            padding: 24px;
+            text-align: center;
+            background-color: #4f46e5;
+            color: #ffffff;
+        }
+
+        .email-header h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .email-body {
+            padding: 32px;
+            text-align: center;
+        }
+
+        .email-body p {
+            margin: 0 0 16px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .otp-code {
+            margin: 24px auto;
+            padding: 16px 24px;
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 6px;
+            color: #4f46e5;
+            background-color: #f1f3ff;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        .expiry {
+            color: #d93025;
+            font-weight: 600;
+        }
+
+        .email-footer {
+            padding: 20px;
+            font-size: 13px;
+            color: #777;
+            text-align: center;
+            background-color: #fafafa;
+        }
+    </style>
+</head>
+
+<body>
+<div class="email-wrapper">
+    <div class="email-header">
+        <h1>Verification Code</h1>
+    </div>
+
+    <div class="email-body">
+        <p th:text="${purpose}">Email Verification</p>
+
+        <p>Please use the code below to continue:</p>
+
+        <div class="otp-code" th:text="${otp}">
+            123456
+        </div>
+
+        <p>
+            This code will expire in
+            <span class="expiry" th:text="${expirationMinutes}">10</span>
+            minutes.
+        </p>
+
+        <p>If you didn’t request this, you can safely ignore this email.</p>
+    </div>
+
+    <div class="email-footer">
+        <p>This is an automated message. Please do not reply.</p>
+        <p>&copy; 2024 Your Company</p>
+    </div>
+</div>
+</body>
+</html>

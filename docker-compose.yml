@@ -1,0 +1,91 @@
+services:
+
+  # Redis for Rate Limiting
+  redis:
+    image: redis:7.2-alpine
+    container_name: zapiee_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # Zipkin for Distributed Tracing
+  Zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - microservices-network
+    restart: unless-stopped
+
+  zoo:
+    image: confluentinc/cp-zookeeper:7.3.2
+    hostname: zoo
+    container_name: zoo
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_SERVERS: zoo:2888:3888
+    ports:
+      - "2181:2181"
+
+  Kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    hostname: Kafka
+    container_name: Kafka
+    depends_on:
+      - zoo
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zoo:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://orderzap-kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  mysql:
+    image: mysql:8.0.36
+    container_name: mysql
+    restart: unless-stopped
+    command:
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --sql-mode=STRICT_TRANS_TABLES
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    ports:
+      - "3307:3306"
+    networks:
+      - microservices-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-uroot", "-p${MYSQL_ROOT_PASSWORD}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  microservices-network:
+  payment-net:
+    driver: bridge
+
+volumes:
+  redis-data:
+  mysql_data:
