@@ -31,7 +31,7 @@ public class JwtAuthenticationFilter implements WebFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
     private static final List<String> PUBLIC_PATHS = List.of(
-            "/api/auth/login", "/api/auth/register", "/api/auth/verify-email-otp",
+            "/api/v1/auth/login", "/api/auth/register", "/api/auth/verify-email-otp",
             "/api/auth/request-login-otp", "/api/auth/login-otp", "/api/auth/otp/send", "/api/auth/otp/resend",
             "/api/category/list", "/api/customer/menu/items", "/api/customer/menu/items/search", "/api/tables/restaurant-name",
             "/api/customer/menu/items/category", "/actuator/health", "/actuator/info", "/api/orders/session/start",
