@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URI;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -34,82 +36,118 @@ public class RestaurantService {
     private final RestaurantRepository restaurantRepository;
     private final RestaurantDocumentRepository restaurantDocumentRepository;
     private final AuthClient authClient;
-    private final MediaClient mediaClient;
 
-    public RestaurantResponse registerRestaurant(Long ownerId, RestaurantRegistrationRequest request,
-                                                 MultipartFile document, DocumentType documentType) {
-
+    public RestaurantResponse registerRestaurant(Long ownerId, RestaurantRegistrationRequest request) {
         log.info("Restaurant registration started for ownerId={}", ownerId);
 
-        AuthUserInfo user = getAndValidateOwner(ownerId);
-        validateRestaurantRegistration(ownerId, request);
-        validateOwnerDocument(document, documentType);
+        // 1. Validate owner ID
+        if (ownerId == null || ownerId <= 0) {
+            throw new BadRequestException("A valid owner ID is required.");
+        }
 
+        // 2. Validate request
+        if (request == null) {
+            throw new BadRequestException("Restaurant registration request is required.");
+        }
+
+        // 3. Validate owner through Auth Service
+        getAndValidateOwner(ownerId);
+        validateRestaurantRegistration(ownerId, request);
+
+        // 5. Validate document type
+        DocumentType documentType = request.getDocumentType();
+
+        if (documentType == null) {
+            throw new BadRequestException("Document type is required.");
+        }
+
+        // 6. Validate document URL
+        String documentUrl = request.getDocumentUrl();
+
+        if (documentUrl == null || documentUrl.isBlank()) {
+            throw new BadRequestException("Document URL is required.");
+        }
+
+        documentUrl = documentUrl.trim();
+
+        if (documentUrl.length() > 1000) {
+            throw new BadRequestException(
+                    "Document URL cannot exceed 1000 characters."
+            );
+        }
+
+        URI documentUri;
+
+        try {
+            documentUri = URI.create(documentUrl);
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Document URL is invalid.");
+        }
+
+        if (!documentUri.isAbsolute()
+                || documentUri.getHost() == null
+                || !("https".equalsIgnoreCase(documentUri.getScheme())
+                || "http".equalsIgnoreCase(documentUri.getScheme()))
+                || documentUri.getUserInfo() != null) {
+
+            throw new BadRequestException(
+                    "Document URL must be a valid HTTP or HTTPS URL."
+            );
+        }
+
+        // 7. Create restaurant
         Restaurant restaurant = Restaurant.builder()
                 .ownerId(ownerId)
                 .businessType(request.getBusinessType().trim())
                 .businessName(request.getBusinessName().trim())
+                .foodCategory(request.getFoodCategory())
                 .ownerName(request.getOwnerName().trim())
                 .businessContact(request.getBusinessContact().trim())
                 .businessEmail(request.getBusinessEmail().trim().toLowerCase())
                 .isActive(true)
                 .build();
 
+        // 8. Create restaurant address
         Address address = Address.builder()
                 .country(request.getCountry().trim())
                 .state(request.getState().trim())
                 .city(request.getCity().trim())
-                .area(request.getArea())
-                .pincode(request.getPincode())
+                .area(request.getArea().trim())
+                .pincode(request.getPincode().trim())
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
                 .geofenceRadiusMeters(request.getGeofenceRadiusMeters())
                 .restaurant(restaurant)
                 .build();
+
         restaurant.setAddress(address);
 
+        // 9. Save restaurant
         Restaurant savedRestaurant = restaurantRepository.save(restaurant);
-        log.info("Restaurant registered successfully. restaurantId={}, ownerId={}", savedRestaurant.getId(), ownerId);
+
+        log.info(
+                "Restaurant saved. restaurantId={}, ownerId={}",
+                savedRestaurant.getId(),
+                ownerId
+        );
 
         RestaurantDocument restaurantDocument = RestaurantDocument.builder()
                 .restaurant(savedRestaurant)
                 .documentType(documentType)
+                .fileUrl(documentUrl)
                 .verified(false)
+                .createdAt(LocalDateTime.now())
                 .build();
 
-        restaurantDocument = restaurantDocumentRepository.save(restaurantDocument);
+        restaurantDocumentRepository.save(restaurantDocument);
 
-        Long documentId = restaurantDocument.getId();
+        log.info(
+                "Owner document metadata saved. restaurantId={}, documentType={}",
+                savedRestaurant.getId(),
+                documentType
+        );
 
-        try {
-            log.info("Uploading owner document. restaurantId={}, documentId={}, documentType={}",
-                    savedRestaurant.getId(), documentId, documentType);
-
-            ApiResponse<String> mediaResponse = mediaClient.uploadIdentityDocument(document,
-                            documentId, ownerId, savedRestaurant.getId());
-
-            if (mediaResponse == null || !mediaResponse.isSuccess()
-                    || mediaResponse.getData() == null || mediaResponse.getData().isBlank()) {
-                throw new IllegalStateException(
-                        "Media Service returned an unsuccessful response or empty file URL"
-                );
-            }
-
-            restaurantDocument.setFileUrl(mediaResponse.getData());
-
-            restaurantDocumentRepository.save(restaurantDocument);
-
-            log.info("Restaurant document uploaded and saved. restaurantId={}, documentId={}, documentType={}",
-                    savedRestaurant.getId(), documentId, documentType);
-
-        } catch (Exception ex) {
-            log.error("Owner document upload failed. restaurantId={}, documentId={}, documentType={}",
-                    savedRestaurant.getId(), documentId, documentType, ex);
-
-            throw new RuntimeException(
-                    "Restaurant registration failed because the owner document could not be uploaded", ex);
-        }
-
+        // 11. Return response
         return RestaurantResponse.builder()
                 .id(savedRestaurant.getId())
                 .ownerId(savedRestaurant.getOwnerId())
@@ -121,7 +159,8 @@ public class RestaurantService {
                 .logoUrl(savedRestaurant.getLogoUrl())
                 .latitude(savedRestaurant.getAddress().getLatitude())
                 .longitude(savedRestaurant.getAddress().getLongitude())
-                .geofenceRadiusMeters(savedRestaurant.getAddress().getGeofenceRadiusMeters())
+                .geofenceRadiusMeters(savedRestaurant.getAddress()
+                                .getGeofenceRadiusMeters())
                 .restaurantStatus(savedRestaurant.getRestaurantStatus())
                 .subscriptionStatus(savedRestaurant.getSubscriptionStatus())
                 .isActive(savedRestaurant.getIsActive())

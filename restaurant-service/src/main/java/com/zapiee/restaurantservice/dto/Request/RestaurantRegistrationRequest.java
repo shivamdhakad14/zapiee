@@ -1,5 +1,6 @@
 package com.zapiee.restaurantservice.dto.Request;
 
+import com.zapiee.restaurantservice.enums.DocumentType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
@@ -46,6 +47,8 @@ public class RestaurantRegistrationRequest {
     @Size(max = 150, message = "Email cannot exceed 150 characters.")
     private String businessEmail;
 
+    private String foodCategory;
+
 
     @NotBlank(message = "Country is required.")
     private String country;
@@ -80,5 +83,12 @@ public class RestaurantRegistrationRequest {
 
     @NotNull(message = "Geofence radius is required.")
     private Integer geofenceRadiusMeters;
+
+    @NotNull(message = "Document type is required.")
+    private DocumentType documentType;
+
+    @NotBlank(message = "Document URL is required.")
+    @Size(max = 1000, message = "Document URL cannot exceed 1000 characters.")
+    private String documentUrl;
 
 }

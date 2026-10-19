@@ -5,7 +5,6 @@ import com.zapiee.restaurantservice.dto.Request.RestaurantRegistrationRequest;
 import com.zapiee.restaurantservice.dto.Response.RestaurantInfoResponse;
 import com.zapiee.restaurantservice.dto.Response.RestaurantResponse;
 import com.zapiee.restaurantservice.dto.Response.RestaurantStatusInfo;
-import com.zapiee.restaurantservice.enums.DocumentType;
 import com.zapiee.restaurantservice.service.RestaurantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -13,12 +12,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -39,16 +36,14 @@ public class RestaurantController {
     @Operation(
             summary = "Register Restaurant",
             description = "Registers a new restaurant for the authenticated owner.")
-    @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/register", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ApiResponse<RestaurantResponse>> registerRestaurant(
             @RequestHeader("X-User-Id") Long userId,
-            @Valid @RequestBody RestaurantRegistrationRequest request,
-            @RequestPart("document") MultipartFile document,
-            @RequestPart("documentType")
-            DocumentType documentType)  {
+            @Valid @RequestBody RestaurantRegistrationRequest request)  {
 
         log.info("Restaurant registration request received.");
-        RestaurantResponse response = restaurantService.registerRestaurant(userId, request, document, documentType);
+        RestaurantResponse response = restaurantService.registerRestaurant(userId, request);
 
         log.info("Restaurant registered successfully for ownerId={}", userId);
         return ResponseEntity.ok(ApiResponse.success(

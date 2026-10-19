@@ -52,6 +52,9 @@ public class Restaurant {
     @Column(nullable = false,unique = true,length = 150)
     private String businessEmail;
 
+    @Column(nullable = false)
+    private String foodCategory;
+
     @Column(length = 500)
     private String logoUrl;
 
