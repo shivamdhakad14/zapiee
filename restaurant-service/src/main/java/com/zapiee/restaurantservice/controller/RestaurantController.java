@@ -5,6 +5,7 @@ import com.zapiee.restaurantservice.dto.Request.RestaurantRegistrationRequest;
 import com.zapiee.restaurantservice.dto.Response.RestaurantInfoResponse;
 import com.zapiee.restaurantservice.dto.Response.RestaurantResponse;
 import com.zapiee.restaurantservice.dto.Response.RestaurantStatusInfo;
+import com.zapiee.restaurantservice.enums.DocumentType;
 import com.zapiee.restaurantservice.service.RestaurantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -16,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -50,6 +52,28 @@ public class RestaurantController {
                 response,
                 "Restaurant register successfully."));
     }
+
+
+    @PostMapping(value = "/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<String>> uploadOwnerDocument(
+            @RequestHeader("X-User-Id") Long ownerId,
+            @RequestHeader("X-Restaurant-Id") Long restaurantId,
+            @RequestParam("documentType") DocumentType documentType,
+            @RequestPart("file") MultipartFile file) {
+
+        String documentUrl = restaurantService.uploadOwnerDocument(
+                ownerId, restaurantId,
+                documentType, file);
+
+        return ResponseEntity.ok(
+                ApiResponse.<String>builder()
+                        .success(true)
+                        .message("Owner document uploaded successfully.")
+                        .data(documentUrl)
+                        .build()
+        );
+    }
+
 
     @Operation(
             summary = "Get Restaurant",

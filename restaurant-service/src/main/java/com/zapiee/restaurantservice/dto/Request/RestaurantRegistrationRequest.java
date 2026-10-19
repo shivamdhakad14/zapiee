@@ -84,11 +84,4 @@ public class RestaurantRegistrationRequest {
     @NotNull(message = "Geofence radius is required.")
     private Integer geofenceRadiusMeters;
 
-    @NotNull(message = "Document type is required.")
-    private DocumentType documentType;
-
-    @NotBlank(message = "Document URL is required.")
-    @Size(max = 1000, message = "Document URL cannot exceed 1000 characters.")
-    private String documentUrl;
-
 }

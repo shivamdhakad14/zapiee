@@ -16,6 +16,8 @@ public interface RestaurantDocumentRepository extends JpaRepository<RestaurantDo
             DocumentType documentType
     );
 
+    Optional<RestaurantDocument> findByRestaurant_Id(Long restaurantId);
+
     boolean existsByRestaurantIdAndDocumentType(
             Long restaurantId,
             DocumentType documentType

@@ -30,10 +30,10 @@ public class RestaurantDocument {
     private Restaurant restaurant;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "document_type", nullable = false, length = 30)
+    @Column(name = "document_type", length = 30)
     private DocumentType documentType;
 
-    @Column(name = "file_url", nullable = false, length = 1000)
+    @Column(name = "file_url", length = 1000)
     private String fileUrl;
 
     @Column(nullable = false)
