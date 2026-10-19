@@ -12,6 +12,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.cors.reactive.CorsUtils;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
@@ -23,7 +24,6 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class JwtAuthenticationFilter implements WebFilter {
 
     @Autowired
@@ -31,19 +31,17 @@ public class JwtAuthenticationFilter implements WebFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
     private static final List<String> PUBLIC_PATHS = List.of(
-            "/api/auth/login", "/api/auth/register", "/api/auth/verify-email-otp",
-            "/api/auth/request-login-otp", "/api/auth/login-otp", "/api/auth/otp/send", "/api/auth/otp/resend",
-            "/api/category/list", "/api/customer/menu/items", "/api/customer/menu/items/search", "/api/tables/restaurant-name",
-            "/api/customer/menu/items/category", "/actuator/health", "/actuator/info", "/api/orders/session/start",
-            "/ws/orders", "/api/orders/check-order", "/api/v1/webHooks/razorpay", "/api/restaurants/create", "/api/staffs/login",
-            "/api/auth/password-reset/request", "/api/auth/password-reset-verify/request",
-            "/api/auth/password-reset/confirm"
+            "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/verify-otp"
     );
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getPath().value();
+
+        if (CorsUtils.isPreFlightRequest(request)) {
+            return chain.filter(exchange);
+        }
 
         if (isPublicPath(path)) {
             return chain.filter(exchange);
