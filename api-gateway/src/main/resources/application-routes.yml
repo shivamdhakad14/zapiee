@@ -5,7 +5,7 @@ spring:
         - id: auth-secure-api
           uri: lb://AUTH-SERVICE
           predicates:
-            - Path=/api/auth/users/**
+            - Path=/api/v1/auth/users/**
             - Method=GET,POST,PUT,PATCH,DELETE
           filters:
             - name: RoleBasedAccess
@@ -27,7 +27,7 @@ spring:
         - id: restaurant-api
           uri: lb://RESTAURANT-SERVICE
           predicates:
-            - Path=/api/restaurants/**,/api/tables/**,/api/v1/restaurants/**
+            - Path=/api/v1/restaurants/**
           filters:
             - name: CircuitBreaker
               args:

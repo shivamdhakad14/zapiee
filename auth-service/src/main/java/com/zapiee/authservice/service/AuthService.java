@@ -88,6 +88,7 @@ public class AuthService {
         user.addRole(userRole);
 
         User save = userRepository.save(user);
+
         otpService.generateAndSendOtp(save.getEmail(), "EMAIL_VERIFICATION");
 
         return userMapper.mapToDto(save);
