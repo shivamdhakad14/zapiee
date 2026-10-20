@@ -16,7 +16,7 @@ public interface MediaClient {
     @PostMapping(value = "/api/v1/media/document/{documentId}/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     ApiResponse<String> uploadIdentityDocument(@RequestPart("file") MultipartFile file,
                                                @PathVariable("documentId") Long documentId,
-                                               @RequestParam("ownerId") Long ownerId,
+                                               @RequestParam("userId") Long userId,
                                                @RequestParam("restaurantId") Long restaurantId);
 
 

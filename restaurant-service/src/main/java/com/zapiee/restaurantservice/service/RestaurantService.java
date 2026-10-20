@@ -17,15 +17,12 @@ import feign.FeignException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -41,24 +38,11 @@ public class RestaurantService {
 
     @Transactional
     public RestaurantResponse registerRestaurant(Long ownerId, RestaurantRegistrationRequest request) {
-
         log.info("Restaurant registration started for ownerId={}", ownerId);
 
-        // 1. Validate owner ID and request
-        if (ownerId == null || ownerId <= 0) {
-            throw new BadRequestException("A valid owner ID is required.");
-        }
-
-        if (request == null) {
-            throw new BadRequestException(
-                    "Restaurant registration request is required.");
-        }
-
-        // 2. Validate owner and restaurant details
         getAndValidateOwner(ownerId);
         validateRestaurantRegistration(ownerId, request);
 
-        // 3. Create restaurant
         Restaurant restaurant = Restaurant.builder()
                 .ownerId(ownerId)
                 .businessType(request.getBusinessType().trim())
@@ -70,7 +54,6 @@ public class RestaurantService {
                 .isActive(true)
                 .build();
 
-        // 4. Create address
         Address address = Address.builder()
                 .country(request.getCountry().trim())
                 .state(request.getState().trim())
@@ -85,29 +68,11 @@ public class RestaurantService {
 
         restaurant.setAddress(address);
 
-        // 5. Save restaurant and generate restaurantId
         Restaurant savedRestaurant = restaurantRepository.save(restaurant);
 
         log.info("Restaurant saved. restaurantId={}, ownerId={}",
                 savedRestaurant.getId(), ownerId);
 
-        // 6. Create a placeholder document record.
-        // documentType and fileUrl will be set by the upload API.
-        RestaurantDocument document = RestaurantDocument.builder()
-                .restaurant(savedRestaurant)
-                .documentType(null)
-                .fileUrl(null)
-                .verified(false)
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        RestaurantDocument savedDocument =
-                restaurantDocumentRepository.save(document);
-
-        log.info("Document ID generated. restaurantId={}, documentId={}",
-                savedRestaurant.getId(), savedDocument.getId());
-
-        // 7. Return restaurant details and generated documentId
         return RestaurantResponse.builder()
                 .id(savedRestaurant.getId())
                 .ownerId(savedRestaurant.getOwnerId())
@@ -127,106 +92,69 @@ public class RestaurantService {
                 .build();
     }
 
+
+
     @Transactional
-    public String uploadOwnerDocument(Long ownerId, Long restaurantId,
-                                      DocumentType documentType, MultipartFile file) {
+    public String uploadDocument(Long ownerId, Long restaurantId,
+                                 DocumentType documentType, MultipartFile file) {
 
-        log.info("Owner document upload started. ownerId={}, restaurantId={}",
-                ownerId, restaurantId);
-
-        // 1. Validate owner and restaurant IDs
-        if (ownerId == null || ownerId <= 0
-                || restaurantId == null || restaurantId <= 0) {
-            throw new BadRequestException(
-                    "Valid owner ID and restaurant ID are required.");
-        }
-
-        // 2. Validate document type
         if (documentType == null) {
             throw new BadRequestException("Document type is required.");
         }
 
-        // 3. Validate file
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("Please select a document file.");
         }
 
-        // 4. Validate owner through Auth Service
         getAndValidateOwner(ownerId);
 
-        // 5. Find restaurant
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Restaurant not found with id: " + restaurantId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Restaurant not found: " + restaurantId));
 
-        // 6. Verify that the restaurant belongs to this owner
         if (!ownerId.equals(restaurant.getOwnerId())) {
             throw new BadRequestException(
-                    "This restaurant does not belong to the specified owner.");
+                    "This restaurant does not belong to this owner.");
         }
 
-        // 7. Retrieve the document record created during registration
-        RestaurantDocument document =
-                restaurantDocumentRepository
-                        .findByRestaurant_Id(restaurantId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Document record not found for restaurant ID: "
-                                                + restaurantId));
+        RestaurantDocument document = RestaurantDocument.builder()
+                .restaurant(restaurant)
+                .documentType(documentType)
+                .fileUrl(null)
+                .verified(false)
+                .createdAt(LocalDateTime.now())
+                .build();
 
-        // 8. Prevent duplicate uploads
-        if (document.getFileUrl() != null
-                && !document.getFileUrl().isBlank()) {
-            throw new BadRequestException(
-                    "A document has already been uploaded for this restaurant.");
+        RestaurantDocument savedDocument = restaurantDocumentRepository.saveAndFlush(document);
+
+        Long documentId = savedDocument.getId();
+
+        if (documentId == null) {
+            throw new IllegalStateException(
+                    "Document ID was not generated.");
         }
-
-        // 9. Upload document through Media Service
-        Long documentId = document.getId();
-
-        log.info(
-                "Calling Media Service. ownerId={}, restaurantId={}, documentId={}",
-                ownerId, restaurantId, documentId
-        );
 
         ApiResponse<String> mediaResponse =
                 mediaClient.uploadIdentityDocument(
-                        file,
-                        documentId,
-                        ownerId,
-                        restaurantId
+                        file, documentId,
+                        ownerId, restaurantId
                 );
 
-        // 10. Validate Media Service response
-        if (mediaResponse == null
-                || mediaResponse.getData() == null
+        if (mediaResponse == null || mediaResponse.getData() == null
                 || mediaResponse.getData().isBlank()) {
-            throw new ServiceUnavailableException(
-                    "Media Service did not return a document URL.");
+            throw new ServiceUnavailableException("Media Service did not return a document URL.");
         }
 
         String documentUrl = mediaResponse.getData().trim();
 
-        if (documentUrl.length() > 1000) {
-            throw new ServiceUnavailableException(
-                    "The document URL returned by Media Service is too long.");
-        }
+        savedDocument.setFileUrl(documentUrl);
+        savedDocument.setUpdatedAt(LocalDateTime.now());
 
-        // 11. Update the existing document record
-        document.setDocumentType(documentType);
-        document.setFileUrl(documentUrl);
-        document.setUpdatedAt(LocalDateTime.now());
-
-        restaurantDocumentRepository.save(document);
-
-        log.info(
-                "Owner document uploaded successfully. restaurantId={}, documentId={}",
-                restaurantId, documentId
-        );
+        restaurantDocumentRepository.save(savedDocument);
 
         return documentUrl;
     }
+
 
 
 
@@ -366,6 +294,11 @@ public class RestaurantService {
             throw new IllegalArgumentException("Invalid authenticated user.");
         }
 
+        if (request == null) {
+            throw new BadRequestException(
+                    "Restaurant registration request is required.");
+        }
+
         if (restaurantRepository.existsByOwnerId(ownerId)) {
             log.warn("Owner {} already has a restaurant.", ownerId);
             throw new RestaurantAlreadyExistsException(
@@ -482,10 +415,14 @@ public class RestaurantService {
                                 "Restaurant not found with id : " + restaurantId));
     }
 
-    private AuthUserInfo getAndValidateOwner(Long ownerId) {
+    private UserInfo getAndValidateOwner(Long ownerId) {
 
         try {
-            AuthUserInfo user = authClient.getUserById(ownerId);
+            UserInfo user = authClient.getUserById(ownerId);
+
+            if (ownerId == null || ownerId <= 0) {
+                throw new BadRequestException("A valid owner ID is required.");
+            }
 
             if (user == null) {
                 throw new ResourceNotFoundException("User not found with id: " + ownerId);
