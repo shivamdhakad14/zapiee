@@ -57,19 +57,15 @@ public class RestaurantController {
 
     @PostMapping(value = "/documents/upload",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<String>> uploadDocument(
+    public ResponseEntity<ApiResponse<RestaurantResponse>> uploadDocument(
             @RequestHeader("X-User-Id") Long ownerId,
             @RequestHeader("X-Restaurant-Id") Long restaurantId,
             @RequestParam("documentType") DocumentType documentType,
             @RequestPart("file") MultipartFile file) {
 
-        String documentUrl = restaurantService.uploadDocument(ownerId, restaurantId, documentType, file);
+        RestaurantResponse restaurantResponse = restaurantService.uploadDocument(ownerId, restaurantId, documentType, file);
 
-        return ResponseEntity.ok(ApiResponse.<String>builder()
-                        .success(true)
-                        .message("Owner document uploaded successfully.")
-                        .data(documentUrl)
-                        .build());
+        return ResponseEntity.ok(ApiResponse.success(restaurantResponse));
     }
 
 

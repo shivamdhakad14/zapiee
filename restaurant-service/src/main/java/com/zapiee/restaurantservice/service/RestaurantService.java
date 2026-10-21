@@ -6,6 +6,7 @@ import com.zapiee.restaurantservice.dto.ApiResponse;
 import com.zapiee.restaurantservice.dto.Request.RestaurantRegistrationRequest;
 import com.zapiee.restaurantservice.dto.Response.*;
 import com.zapiee.restaurantservice.enums.DocumentType;
+import com.zapiee.restaurantservice.enums.RestaurantStatus;
 import com.zapiee.restaurantservice.enums.SubscriptionStatus;
 import com.zapiee.restaurantservice.exception.*;
 import com.zapiee.restaurantservice.model.Address;
@@ -51,7 +52,8 @@ public class RestaurantService {
                 .ownerName(request.getOwnerName().trim())
                 .businessContact(request.getBusinessContact().trim())
                 .businessEmail(request.getBusinessEmail().trim().toLowerCase())
-                .isActive(true)
+                .isActive(false)
+                .restaurantStatus(RestaurantStatus.PENDING_REVIEW)
                 .build();
 
         Address address = Address.builder()
@@ -92,10 +94,8 @@ public class RestaurantService {
                 .build();
     }
 
-
-
     @Transactional
-    public String uploadDocument(Long ownerId, Long restaurantId,
+    public RestaurantResponse uploadDocument(Long ownerId, Long restaurantId,
                                  DocumentType documentType, MultipartFile file) {
 
         if (documentType == null) {
@@ -152,10 +152,8 @@ public class RestaurantService {
 
         restaurantDocumentRepository.save(savedDocument);
 
-        return documentUrl;
+        return buildRestaurantResponse(restaurant);
     }
-
-
 
 
     @Transactional(Transactional.TxType.SUPPORTS)
@@ -385,6 +383,7 @@ public class RestaurantService {
                 .logoUrl(restaurant.getLogoUrl())
                 .restaurantStatus(restaurant.getRestaurantStatus())
                 .subscriptionStatus(restaurant.getSubscriptionStatus())
+                .restaurantStatus(restaurant.getRestaurantStatus())
                 .isActive(restaurant.getIsActive())
                 .country(address != null ? address.getCountry() : null)
                 .state(address != null ? address.getState() : null)
@@ -415,10 +414,10 @@ public class RestaurantService {
                                 "Restaurant not found with id : " + restaurantId));
     }
 
-    private UserInfo getAndValidateOwner(Long ownerId) {
+    private void getAndValidateOwner(Long ownerId) {
 
         try {
-            UserInfo user = authClient.getUserById(ownerId);
+            UserInfo user = authClient.getUserById(ownerId).getData();
 
             if (ownerId == null || ownerId <= 0) {
                 throw new BadRequestException("A valid owner ID is required.");
@@ -437,7 +436,6 @@ public class RestaurantService {
             }
 
             log.info("User verified successfully from Auth Service. userId={}", ownerId);
-            return user;
 
         } catch (FeignException.NotFound ex) {
             log.warn("User not found in Auth Service. userId={}", ownerId);
