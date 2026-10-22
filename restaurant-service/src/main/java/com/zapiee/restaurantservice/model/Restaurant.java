@@ -59,9 +59,11 @@ public class Restaurant {
     private String logoUrl;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean isActive = false;
 
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private RestaurantStatus restaurantStatus = RestaurantStatus.PENDING_REVIEW;
 
     private String activePlanId;
@@ -72,6 +74,7 @@ public class Restaurant {
     private String lastPaymentId;
 
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private SubscriptionStatus subscriptionStatus = SubscriptionStatus.PENDING;
     private Boolean isSubscriptionActive = false;
     private LocalDateTime subscriptionStartDate;

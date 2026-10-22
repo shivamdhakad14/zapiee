@@ -6,6 +6,7 @@ import com.zapiee.restaurantservice.dto.Response.RestaurantInfoResponse;
 import com.zapiee.restaurantservice.dto.Response.RestaurantResponse;
 import com.zapiee.restaurantservice.dto.Response.RestaurantStatusInfo;
 import com.zapiee.restaurantservice.enums.DocumentType;
+import com.zapiee.restaurantservice.enums.RestaurantStatus;
 import com.zapiee.restaurantservice.service.RestaurantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -68,6 +69,19 @@ public class RestaurantController {
         return ResponseEntity.ok(ApiResponse.success(restaurantResponse));
     }
 
+
+    @PatchMapping("/{restaurantId}/status")
+    public ResponseEntity<ApiResponse<RestaurantResponse>> changeRestaurantStatus(
+            @PathVariable Long restaurantId,
+            @RequestParam RestaurantStatus status) {
+
+        RestaurantResponse response = restaurantService.changeRestaurantStatus(
+                restaurantId, status);
+
+        return ResponseEntity.ok(ApiResponse.success(
+                        response,
+                        "Restaurant status updated successfully."));
+    }
 
 
     @Operation(

@@ -155,6 +155,34 @@ public class RestaurantService {
         return buildRestaurantResponse(restaurant);
     }
 
+    @Transactional
+    public RestaurantResponse changeRestaurantStatus(Long restaurantId, RestaurantStatus newStatus) {
+
+        log.info("Changing restaurant status. restaurantId={}, newStatus={}",
+                restaurantId, newStatus);
+
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Restaurant not found with id: " + restaurantId));
+
+        restaurant.setRestaurantStatus(newStatus);
+
+        if (newStatus == RestaurantStatus.APPROVED || newStatus == RestaurantStatus.ACTIVE) {
+            restaurant.setIsActive(true);
+        } else {
+            restaurant.setIsActive(false);   // REJECTED, SUSPENDED, or DEACTIVATED
+        }
+
+        Restaurant updatedRestaurant = restaurantRepository.save(restaurant);
+
+        log.info("Restaurant status updated. restaurantId={}, status={}, isActive={}",
+                updatedRestaurant.getId(), updatedRestaurant.getRestaurantStatus(),
+                updatedRestaurant.getIsActive());
+
+        return buildRestaurantResponse(restaurant);
+    }
+
 
     @Transactional(Transactional.TxType.SUPPORTS)
     public RestaurantResponse getRestaurantByOwnerId(Long ownerId) {
