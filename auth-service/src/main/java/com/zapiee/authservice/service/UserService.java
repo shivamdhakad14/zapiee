@@ -27,6 +27,18 @@ public class UserService {
         return userMapper.mapToDto(user);
     }
 
+    public void assignRole(Long userId){
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("user not found"));
+
+        Role userRole = roleRepository.findByName("ROLE_OWNER")
+                .orElseThrow(() -> new BusinessRuleViolationException("Default role not found",
+                        HttpStatus.INTERNAL_SERVER_ERROR.toString()));
+
+        user.addRole(userRole);
+        userRepository.save(user);
+    }
+
     public UserInfo updateUserRole(Long userId){
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user not found"));

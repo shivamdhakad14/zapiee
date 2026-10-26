@@ -4,6 +4,7 @@ import com.zapiee.restaurantservice.client.AuthClient;
 import com.zapiee.restaurantservice.client.MediaClient;
 import com.zapiee.restaurantservice.dto.ApiResponse;
 import com.zapiee.restaurantservice.dto.Request.RestaurantRegistrationRequest;
+import com.zapiee.restaurantservice.dto.Request.SubscriptionStatusUpdate;
 import com.zapiee.restaurantservice.dto.Response.*;
 import com.zapiee.restaurantservice.enums.DocumentType;
 import com.zapiee.restaurantservice.enums.RestaurantStatus;
@@ -54,6 +55,7 @@ public class RestaurantService {
                 .businessEmail(request.getBusinessEmail().trim().toLowerCase())
                 .isActive(false)
                 .restaurantStatus(RestaurantStatus.PENDING_REVIEW)
+                .subscriptionStatus(SubscriptionStatus.PENDING)
                 .build();
 
         Address address = Address.builder()
@@ -71,6 +73,8 @@ public class RestaurantService {
         restaurant.setAddress(address);
 
         Restaurant savedRestaurant = restaurantRepository.save(restaurant);
+
+        authClient.assignRoleOwnerToUser(ownerId);
 
         log.info("Restaurant saved. restaurantId={}, ownerId={}",
                 savedRestaurant.getId(), ownerId);
@@ -286,15 +290,27 @@ public class RestaurantService {
     }
 
 
-
-    public void updateSubscriptionStatus(Long restaurantId, SubscriptionStatus status) {
+    public void updateSubscriptionStatus(Long restaurantId, SubscriptionStatusUpdate request) {
         log.info("Updating subscription status for restaurant={}", restaurantId);
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() ->
                         new RestaurantNotFoundException(
                                 "Restaurant not found with id : " + restaurantId));
-        restaurant.setIsSubscriptionActive(true);
-        restaurant.setSubscriptionStatus(SubscriptionStatus.ACTIVE);
+
+        if (request.getStatus().equals(SubscriptionStatus.ACTIVE)){
+            restaurant.setActivePlanId(request.getActivePlanId());
+            restaurant.setActiveSubscriptionId(request.getActiveSubscriptionId());
+            restaurant.setIsActive(true);
+            restaurant.setIsSubscriptionActive(true);
+            restaurant.setSubscriptionEndEpoch(request.getSubscriptionEndEpoch());
+            restaurant.setSubscriptionStatus(SubscriptionStatus.ACTIVE);
+
+            restaurantRepository.save(restaurant);
+            return;
+        }
+
+        restaurant.setIsSubscriptionActive(false);
+        restaurant.setSubscriptionStatus(request.getStatus());
         restaurantRepository.save(restaurant);
         log.info("Subscription updated successfully.");
     }

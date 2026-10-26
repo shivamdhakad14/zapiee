@@ -15,9 +15,11 @@ import com.zapiee.subscriptionservice.model.Plan;
 import com.zapiee.subscriptionservice.repository.SubscriptionRepository;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -314,7 +316,7 @@ public class SubscriptionService {
         String   customerId = customer.get("id");
         log.info("Created Razorpay customer {} for restaurant={}", customerId, restaurantId);
 
-        restaurantClient.updateRazorpayCustomerId(restaurantId, customerId);
+        restaurantClient.updateRazorpayCustomer(restaurantId, customerId);
         return customerId;
     }
 
@@ -378,6 +380,7 @@ public class SubscriptionService {
         SubscriptionResponse resp = SubscriptionResponse.builder()
                 .id(sub.getId())
                 .razorpaySubscriptionId(sub.getRazorpaySubscriptionId())
+                .razorpayKeyId("rzp_test_TcnRgd5AX8G2Eu")
                 .plan(planService.toPlanResponse(plan))
                 .status(sub.getStatus())
                 .shortUrl(sub.getShortUrl())

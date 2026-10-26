@@ -23,10 +23,10 @@ public class CreateMenuItemRequest {
     @Size(max = 1000, message = "Description cannot exceed 1000 characters")
     private String description;
 
-    @Pattern(
-            regexp = "^(https?://).+\\.(jpg|jpeg|png|webp)$",
-            message = "Image URL must be a valid http(s) link ending in jpg, jpeg, png, or webp"
-    )
+//    @Pattern(
+//            regexp = "^(https?://).+\\.(jpg|jpeg|png|webp)$",
+//            message = "Image URL must be a valid http(s) link ending in jpg, jpeg, png, or webp"
+//    )
     private String imageUrl;
 
     @NotNull(message = "Price is required")

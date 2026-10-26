@@ -107,7 +107,7 @@ public class TableController {
             description = " Returns all tables belonging to the restaurant with pagination.")
     @GetMapping
     public ResponseEntity<ApiResponse<Page<TableResponse>>> getAllTables(
-            @RequestHeader(RESTAURANT_ID_HEADER) Long restaurantId,
+            @RequestHeader("X-Restaurant-Id") Long restaurantId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 

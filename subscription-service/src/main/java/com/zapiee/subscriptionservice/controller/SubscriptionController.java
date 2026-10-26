@@ -78,7 +78,6 @@ public class SubscriptionController {
         return ResponseEntity.ok(ApiResponse.success(active, active ? "Active" : "Inactive"));
     }
 
-
     @PostMapping("/cancel")
     public ResponseEntity<ApiResponse<SubscriptionResponse>> cancel(
             @RequestParam Long restaurantId,

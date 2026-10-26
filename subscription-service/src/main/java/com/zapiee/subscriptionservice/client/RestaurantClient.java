@@ -2,7 +2,10 @@ package com.zapiee.subscriptionservice.client;
 
 import com.zapiee.subscriptionservice.dto.request.RestaurantInformation;
 import com.zapiee.subscriptionservice.dto.request.SubscriptionStatusUpdate;
+import com.zapiee.subscriptionservice.dto.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -13,12 +16,9 @@ public interface RestaurantClient {
     @GetMapping("/api/v1/restaurants/{restaurantId}")
     Optional<RestaurantInformation> getRestaurantInformation(@PathVariable Long restaurantId);
 
-    @PutMapping("/api/restaurants/{restaurantId}/subscription-status")
-    void updateSubscriptionStatus(@PathVariable Long restaurantId, @RequestBody SubscriptionStatusUpdate update);
+    @PutMapping("/api/v1/restaurants/{restaurantId}/subscription-status")
+    ApiResponse<Void> updateSubscriptionStatus(@PathVariable Long restaurantId, @RequestBody SubscriptionStatusUpdate update);
 
-    @PutMapping("/api/restaurants/{restaurantId}/razorpay-customer")
-    void updateRazorpayCustomerId(
-            @PathVariable Long restaurantId,
-            @RequestParam String razorpayCustomerId
-    );
+    @PutMapping("/api/v1/restaurants/{restaurantId}/razorpay-customer")
+    ApiResponse<Void> updateRazorpayCustomer(@PathVariable Long restaurantId, @RequestParam String razorpayCustomerId);
 }

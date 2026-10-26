@@ -23,7 +23,8 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_URLS = {
             "/api/v1/webhooks/**",
-            "/api/v1/plans",
+            "/api/v1/plans/**",
+            "/api/v1/subscriptions/**",
             "/api/subscriptions/**",
             "/api/v1/checkout/**",
             "/actuator/health",

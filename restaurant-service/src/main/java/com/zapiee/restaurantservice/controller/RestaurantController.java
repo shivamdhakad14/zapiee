@@ -2,11 +2,11 @@ package com.zapiee.restaurantservice.controller;
 
 import com.zapiee.restaurantservice.dto.ApiResponse;
 import com.zapiee.restaurantservice.dto.Request.RestaurantRegistrationRequest;
+import com.zapiee.restaurantservice.dto.Request.SubscriptionStatusUpdate;
 import com.zapiee.restaurantservice.dto.Response.RestaurantInfoResponse;
 import com.zapiee.restaurantservice.dto.Response.RestaurantResponse;
 import com.zapiee.restaurantservice.dto.Response.RestaurantStatusInfo;
 import com.zapiee.restaurantservice.enums.DocumentType;
-import com.zapiee.restaurantservice.enums.RestaurantStatus;
 import com.zapiee.restaurantservice.service.RestaurantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -55,7 +56,6 @@ public class RestaurantController {
     }
 
 
-
     @PostMapping(value = "/documents/upload",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<RestaurantResponse>> uploadDocument(
@@ -67,20 +67,6 @@ public class RestaurantController {
         RestaurantResponse restaurantResponse = restaurantService.uploadDocument(ownerId, restaurantId, documentType, file);
 
         return ResponseEntity.ok(ApiResponse.success(restaurantResponse));
-    }
-
-
-    @PatchMapping("/{restaurantId}/status")
-    public ResponseEntity<ApiResponse<RestaurantResponse>> changeRestaurantStatus(
-            @PathVariable Long restaurantId,
-            @RequestParam RestaurantStatus status) {
-
-        RestaurantResponse response = restaurantService.changeRestaurantStatus(
-                restaurantId, status);
-
-        return ResponseEntity.ok(ApiResponse.success(
-                        response,
-                        "Restaurant status updated successfully."));
     }
 
 
@@ -197,31 +183,21 @@ public class RestaurantController {
     }
 
 
+    @PutMapping("/{restaurantId}/subscription-status")
+    public ResponseEntity<ApiResponse<Void>> updateSubscriptionStatus(@PathVariable Long restaurantId, @RequestBody SubscriptionStatusUpdate request) {
 
-//    @Operation(
-//            summary = "Activate Subscription",
-//            description = "Activates the first subscription for a restaurant."
-//    )
-//    @PatchMapping("/{restaurantId}/subscription/activate")
-//    public ResponseEntity<ApiResponse<Void>> activateSubscription(
-//            @PathVariable Long restaurantId,
-//            @Valid @RequestBody SubscriptionRequest request) {
-//
-//        restaurantService.updateSubscriptionStatus(restaurantId, request);
-//        return ApiResponse.success(
-//                HttpStatus.OK,
-//                "Subscription activated successfully.",
-//                null
-//        );
-//    }
+        restaurantService.updateSubscriptionStatus(restaurantId, request);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 
 
     @Operation(
             summary = "Update Razorpay Customer",
             description = "Updates the Razorpay customer id."
     )
-    @PatchMapping("/razorpay/customer")
-    public ResponseEntity<ApiResponse<Void>> updateRazorpayCustomer(@RequestHeader("X-Restaurant-Id") Long restaurantId, @RequestParam String razorpayCustomerId) {
+    @PutMapping("/{restaurantId}/razorpay-customer")
+    public ResponseEntity<ApiResponse<Void>> updateRazorpayCustomer(@PathVariable Long restaurantId, @RequestParam String razorpayCustomerId) {
+        log.info("request hit for update customerId for restaurant id : {}", restaurantId);
         restaurantService.updateRazorpayCustomerId(restaurantId, razorpayCustomerId);
         return ResponseEntity.ok(ApiResponse.success(
                 null,

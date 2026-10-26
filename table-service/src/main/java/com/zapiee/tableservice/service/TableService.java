@@ -138,12 +138,7 @@ public class TableService {
 
         String qrToken = generateUniqueToken();
 
-        String qrPayload = qrPayloadUtil.buildPayload(
-                        table.getRestaurantId(),
-                        table.getId(),
-                        table.getTableNumber(),
-                        qrToken
-                );
+        String qrPayload = qrPayloadUtil.buildPayload(qrToken);
 
         String qrImageBase64 = qrGeneratorUtil.generateQrBase64(qrPayload);
 
@@ -358,11 +353,7 @@ public class TableService {
 
         String newQrToken = generateUniqueToken();
 
-        String newQrPayload = qrPayloadUtil.buildPayload(
-                        table.getRestaurantId(),
-                        table.getId(),
-                        table.getTableNumber(),
-                        newQrToken);
+        String newQrPayload = qrPayloadUtil.buildPayload(newQrToken);
 
         String newQrImageBase64 = qrGeneratorUtil.generateQrBase64(newQrPayload);
 

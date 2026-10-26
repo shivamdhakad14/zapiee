@@ -81,6 +81,33 @@ services:
       timeout: 5s
       retries: 5
 
+  subscription-service:
+    build: .
+    container_name: subscription-service
+    ports:
+      - "8086:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - payment-net
+    restart: on-failure
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: subscription-ngrok
+    command: http host.docker.internal:8086
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+
 networks:
   microservices-network:
   payment-net:
