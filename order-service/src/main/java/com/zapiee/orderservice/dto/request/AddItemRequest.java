@@ -23,9 +23,7 @@ import java.util.List;
 )
 public class AddItemRequest {
 
-    @NotNull
-    @Positive
-    private Long id;
+    private String orderId;
 
     @NotEmpty(message = "Items list must not be empty")
     @Size(max = 50, message = "You can add a maximum of 50 items in one request")

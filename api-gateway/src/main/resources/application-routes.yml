@@ -43,7 +43,7 @@ spring:
         - id: menu-public-api
           uri: lb://MENU-SERVICE
           predicates:
-            - Path=/api/category/**,/api/customer/menu/**
+            - Path=/api/v1/public-menu/**
           filters:
             - name: CircuitBreaker
               args:
@@ -53,7 +53,7 @@ spring:
         - id: menu-secure-api
           uri: lb://MENU-SERVICE
           predicates:
-            - Path=/api/v1/menu/**,/api/v1/categories/**
+            - Path=/api/v1/menu/**,/api/v1/categories/**,/api/v1/images/**
           filters:
             - name: RoleBasedAccess
               args:
@@ -67,7 +67,7 @@ spring:
         - id: order-api
           uri: lb://ORDER-SERVICE
           predicates:
-            - Path=/api/orders/**,/ws/orders/**
+            - Path=/api/v1/orders/**,/ws/orders/**
           filters:
             - name: CircuitBreaker
               args:

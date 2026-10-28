@@ -12,18 +12,20 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(
-        name = "Order Item Response",
-        description = "Menu item information stored as part of an order."
-)
+@Schema(description = "Order item response")
 public class OrderItemResponse {
 
     private Long itemId;
-    private String name;
-    private BigDecimal price;
-    private Integer quantity;
-    private BigDecimal lineTotal;
-    private String imageUrl;
-    private String currency;
-}
 
+    private String name;
+
+    private BigDecimal price;
+
+    private Integer quantity;
+
+    private String imageUrl;
+
+    private String currency;
+
+    private BigDecimal total;
+}

@@ -16,6 +16,6 @@ public class TableResolveResponse {
     private Long restaurantId;
     private Long tableId;
     private String sessionToken;
-    private LocalDateTime sessionExpiresAt;
+    private LocalDateTime expireAt;
 
 }

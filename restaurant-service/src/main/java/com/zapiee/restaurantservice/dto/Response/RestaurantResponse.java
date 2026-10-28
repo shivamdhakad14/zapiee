@@ -39,8 +39,8 @@ public class RestaurantResponse {
     private String country;
     private String city;
     private String state;
-    private BigDecimal latitude;
-    private BigDecimal longitude;
+    private Double latitude;
+    private Double longitude;
     private Integer geofenceRadiusMeters;
     private String area;
     private String pincode;

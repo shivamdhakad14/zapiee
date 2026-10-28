@@ -74,12 +74,12 @@ public class RestaurantRegistrationRequest {
     @NotNull(message = "Latitude is required.")
     @DecimalMin("-90.0")
     @DecimalMax("90.0")
-    private BigDecimal latitude;
+    private Double latitude;
 
     @NotNull(message = "Longitude is required.")
     @DecimalMin("-180.0")
     @DecimalMax("180.0")
-    private BigDecimal longitude;
+    private Double longitude;
 
     @NotNull(message = "Geofence radius is required.")
     private Integer geofenceRadiusMeters;

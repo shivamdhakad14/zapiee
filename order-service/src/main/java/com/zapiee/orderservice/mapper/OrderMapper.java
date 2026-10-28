@@ -1,3 +1,4 @@
+
 package com.zapiee.orderservice.mapper;
 
 import com.zapiee.orderservice.dto.request.AddItemRequest;
@@ -12,41 +13,52 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 @Component
 @Schema(
-        name = "Order Mapper",
-        description = "Maps Order Service entities to request and response DTOs."
+        name = "OrderMapper",
+        description = "Maps order requests and entities to response DTOs"
 )
 public class OrderMapper {
 
+    private static final String DEFAULT_CURRENCY = "INR";
 
     public List<OrderItem> toEntity(AddItemRequest request, Order order) {
 
-        if (request == null || request.getItems() == null ||
-                request.getItems().isEmpty()) {
-            return Collections.emptyList();
+        if (request == null) {
+            throw new IllegalArgumentException("Add item request cannot be null");
         }
 
         if (order == null) {
-            throw new IllegalArgumentException(
-                    "Order cannot be null.");
+            throw new IllegalArgumentException("Order cannot be null");
         }
 
-        return request.getItems()
-                .stream()
-                .filter(Objects::nonNull)
-                .map(item -> toEntity(item, order))
-                .toList();
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new IllegalArgumentException("At least one order item is required");
+        }
+
+        List<OrderItem> result = new ArrayList<>();
+
+        for (OrderItemDTO dto : request.getItems()) {
+            if (dto == null) {
+                throw new IllegalArgumentException("Order item cannot be null");
+            }
+
+            OrderItem item = toEntity(dto, order);
+            result.add(item);
+        }
+
+        return result;
     }
 
+
     private OrderItem toEntity(OrderItemDTO dto, Order order) {
+
         if (dto == null) {
-            throw new IllegalArgumentException(
-                    "Order item cannot be null.");
+            throw new IllegalArgumentException("Order item cannot be null");
         }
 
         return OrderItem.builder()
@@ -55,16 +67,15 @@ public class OrderMapper {
                 .price(dto.getPrice())
                 .quantity(dto.getQuantity())
                 .imageUrl(dto.getImageUrl())
-                .currency(
-                        dto.getCurrency() != null
-                                && !dto.getCurrency().isBlank()
-                                ? dto.getCurrency()
-                                : "INR"
-                )
+                .currency(resolveCurrency(dto.getCurrency()))
                 .build();
     }
 
     public OrderItemDTO toDto(OrderItem item) {
+
+        if (item == null) {
+            throw new IllegalArgumentException("Order item cannot be null");
+        }
 
         return OrderItemDTO.builder()
                 .itemId(item.getId())
@@ -72,20 +83,22 @@ public class OrderMapper {
                 .price(item.getPrice())
                 .quantity(item.getQuantity())
                 .imageUrl(item.getImageUrl())
-                .currency(resolveItemCurrency(item))
+                .currency(resolveCurrency(item.getCurrency()))
                 .build();
     }
 
 
-    private OrderItemResponse toItemResponse( OrderItem item ) {
+    public OrderItemResponse toItemResponse(OrderItem item) {
+
         if (item == null) {
             return null;
         }
 
-        BigDecimal lineTotal = BigDecimal.ZERO;
-        if (item.getPrice() != null && item.getQuantity() != null) {
-            lineTotal = item.getPrice() .multiply( BigDecimal.valueOf(item.getQuantity()) );
-        }
+        BigDecimal price = item.getPrice() != null ? item.getPrice() : BigDecimal.ZERO;
+
+        int quantity = item.getQuantity() != null ? item.getQuantity() : 0;
+
+        BigDecimal lineTotal = price.multiply(BigDecimal.valueOf(quantity));
 
         return OrderItemResponse.builder()
                 .itemId(item.getId())
@@ -93,12 +106,17 @@ public class OrderMapper {
                 .price(item.getPrice())
                 .quantity(item.getQuantity())
                 .imageUrl(item.getImageUrl())
-                .currency(resolveItemCurrency(item))
-                .lineTotal(lineTotal)
+                .currency(resolveCurrency(item.getCurrency()))
+                .total(lineTotal)
                 .build();
     }
 
+
     public OrderResponse toOrderResponse(Order order) {
+
+        if (order == null) {
+            throw new IllegalArgumentException("Order cannot be null");
+        }
 
         return OrderResponse.builder()
                 .orderId(order.getOrderId())
@@ -111,7 +129,7 @@ public class OrderMapper {
                 .taxPercentage(order.getTaxPercentage())
                 .taxAmount(order.getTaxAmount())
                 .totalAmount(order.getTotalAmount())
-                .currency(resolveCurrency(order.getItems()))
+                .currency(resolveOrderCurrency(order.getItems()))
                 .payment(order.isPayment())
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
@@ -120,7 +138,12 @@ public class OrderMapper {
                 .build();
     }
 
+
     public OrderListResponse toListResponse(Order order) {
+
+        if (order == null) {
+            throw new IllegalArgumentException("Order cannot be null");
+        }
 
         return OrderListResponse.builder()
                 .id(order.getId())
@@ -133,7 +156,7 @@ public class OrderMapper {
                 .taxPercentage(order.getTaxPercentage())
                 .taxAmount(order.getTaxAmount())
                 .totalAmount(order.getTotalAmount())
-                .currency(resolveCurrency(order.getItems()))
+                .currency(resolveOrderCurrency(order.getItems()))
                 .payment(order.isPayment())
                 .createdAt(order.getCreatedAt())
                 .completedAt(order.getCompletedAt())
@@ -142,6 +165,10 @@ public class OrderMapper {
     }
 
     public OrderSnapshotResponse toSnapshot(Order order) {
+
+        if (order == null) {
+            throw new IllegalArgumentException("Order cannot be null");
+        }
 
         return OrderSnapshotResponse.builder()
                 .restaurantId(order.getRestaurantId())
@@ -162,66 +189,50 @@ public class OrderMapper {
                 .build();
     }
 
-    private List<OrderItemResponse> toItemResponseList(List<OrderItem> items) {
+
+    private List<OrderItemResponse> toItemResponseList(
+            List<OrderItem> items) {
 
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
 
-        return items.stream()
-                .filter(Objects::nonNull)
-                .map(this::toItemResponse)
-                .toList();
+        List<OrderItemResponse> result = new ArrayList<>(items.size());
+
+        for (OrderItem item : items) {
+            if (item != null) {
+                result.add(toItemResponse(item));
+            }
+        }
+
+        return result;
     }
 
-    private List<OrderItemDTO> toItemDtoList(List<OrderItem> items) {
+
+    private String resolveOrderCurrency(List<OrderItem> items) {
 
         if (items == null || items.isEmpty()) {
-            return Collections.emptyList();
+            return DEFAULT_CURRENCY;
         }
 
-        return items.stream()
-                .filter(Objects::nonNull)
-                .map(this::toDto)
-                .toList();
+        for (OrderItem item : items) {
+            if (item != null && item.getCurrency() != null &&
+                    !item.getCurrency().isBlank()) {
+                return item.getCurrency().trim()
+                        .toUpperCase(java.util.Locale.ROOT);
+            }
+        }
+
+        return DEFAULT_CURRENCY;
     }
 
-    private String resolveCurrency(List<OrderItem> items) {
 
-        if (items == null || items.isEmpty()) {
-            return "INR";
+    private String resolveCurrency(String currency) {
+
+        if (currency == null || currency.isBlank()) {
+            return DEFAULT_CURRENCY;
         }
 
-        return items.stream()
-                .filter(Objects::nonNull)
-                .map(OrderItem::getCurrency)
-                .filter(currency ->
-                        currency != null &&
-                                !currency.isBlank()
-                )
-                .findFirst()
-                .orElse("INR");
-    }
-
-    private String resolveItemCurrency(OrderItem item) {
-
-        if (item.getCurrency() == null || item.getCurrency().isBlank()) {
-            return "INR";
-        }
-
-        return item.getCurrency();
-    }
-
-    private java.math.BigDecimal calculateLineTotal(OrderItem item) {
-
-        if (item.getPrice() == null || item.getQuantity() == null) {
-            return java.math.BigDecimal.ZERO;
-        }
-
-        return item.getPrice().multiply(
-                        java.math.BigDecimal.valueOf(
-                                item.getQuantity()
-                        )
-                );
+        return currency.trim().toUpperCase(java.util.Locale.ROOT);
     }
 }

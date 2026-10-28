@@ -22,6 +22,8 @@ public class OrderConnectionResponse {
     private Long tableId;
     private String sessionToken;
     private Role role;
+    // here i want to show order ifa table has no order running then no order shows
+    // but if the order has still running then it show after the connection
 
 }
 

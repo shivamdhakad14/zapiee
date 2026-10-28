@@ -8,20 +8,24 @@ import com.zapiee.menu_service.dto.response.PublicMenuResponse;
 import com.zapiee.menu_service.dto.response.TableResolveResponse;
 import com.zapiee.menu_service.entity.Category;
 import com.zapiee.menu_service.entity.MenuItem;
+import com.zapiee.menu_service.exception.BusinessRuleViolationException;
 import com.zapiee.menu_service.mapper.MenuItemMapper;
 import com.zapiee.menu_service.repository.CategoryRepository;
 import com.zapiee.menu_service.repository.MenuItemRepository;
 import com.zapiee.menu_service.validation.RestaurantValidation;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PublicMenuItemService {
@@ -33,8 +37,18 @@ public class PublicMenuItemService {
     private final TableClient tableClient;
 
     public PublicMenuResponse getPublicMenu(TableResolveRequest request){
-        TableResolveResponse tableResolveResponse = tableClient.resolveTable(request);
-        restaurantValidation.validateRestaurantExist(tableResolveResponse.getRestaurantId());
+        TableResolveResponse tableResolveResponse;
+        log.info("scan qr request received for restaurant : {}", request.getQrToken());
+        try{
+             tableResolveResponse = tableClient.resolveTable(request);
+             log.info("table resolve success : {}", tableResolveResponse.getRestaurantId());
+        } catch (RuntimeException e) {
+            log.error("table resolve failed");
+            throw new BusinessRuleViolationException(e.getMessage(), HttpStatus.BAD_REQUEST.toString());
+        }
+
+        // restaurantValidation.validateRestaurantExist(tableResolveResponse.getRestaurantId());
+        log.info("table resolve response : {}", tableResolveResponse.getRestaurantId());
 
         List<Category> categories = categoryRepository
                 .findByRestaurantIdAndIsDeletedFalseAndActiveTrueOrderByDisplayOrderAsc(tableResolveResponse.getRestaurantId());

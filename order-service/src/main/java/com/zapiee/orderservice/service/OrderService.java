@@ -1,3 +1,4 @@
+
 package com.zapiee.orderservice.service;
 
 import com.zapiee.orderservice.client.TableSessionClient;
@@ -18,9 +19,6 @@ import com.zapiee.orderservice.model.Order;
 import com.zapiee.orderservice.model.OrderItem;
 import com.zapiee.orderservice.repository.OrderItemRepository;
 import com.zapiee.orderservice.repository.OrderRepository;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +27,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -36,19 +37,17 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@Tag(
-        name = "Order Service",
-        description = "Business operations for restaurant orders, table sessions and real-time order updates."
-)
 public class OrderService {
 
     private static final String DEFAULT_CURRENCY = "INR";
+    private static final int MAX_ITEM_QUANTITY = 1000;
 
     private static final List<OrderStatus> RUNNING_STATUSES =
             List.of(OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.SERVED);
@@ -60,25 +59,23 @@ public class OrderService {
     private final WebSocketPushService push;
 
     @Value("${zapiee.order.tax-percentage:0}")
-    private BigDecimal defaultTaxPercentage ;
-
+    private BigDecimal defaultTaxPercentage;
 
     @Transactional
-    @Operation(
-            summary = "Create first order",
-            description = "Creates the first running order for an active Table Service session."
-    )
     public OrderResponse placeFirstOrder(String sessionToken, AddItemRequest request) {
 
         TableSessionResponse session = validateAndGetActiveSession(sessionToken);
+
         validateAddItemRequest(request);
 
-        Optional<Order> existingOrder =
-                orderRepository.findBySessionId(session.getSessionId());
+        Optional<Order> runningOrder =
+                orderRepository.findByRestaurantIdAndTableNumberAndStatusIn(
+                        session.getRestaurantId(), session.getTableNumber(),
+                        RUNNING_STATUSES);
 
-        if (existingOrder.isPresent()) {
+        if (runningOrder.isPresent()) {
             throw new IllegalStateException(
-                    "A running order already exists for this table session. Use NEW_ITEM.");
+                    "A running order already exists for this table. Use NEW_ITEM.");
         }
 
         Order order = Order.builder()
@@ -89,20 +86,19 @@ public class OrderService {
                 .sessionToken(session.getSessionToken())
                 .status(OrderStatus.PENDING)
                 .payment(false)
-                .subtotal(BigDecimal.ZERO)
+                .subtotal(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
                 .taxPercentage(resolveTaxPercentage())
-                .taxAmount(BigDecimal.ZERO)
-                .totalAmount(BigDecimal.ZERO)
+                .taxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
+                .totalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
                 .items(new ArrayList<>())
                 .build();
 
         addItemsToOrder(order, request);
-
         recalculateTotals(order);
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(savedOrder, "NEW_ITEM");
+        broadcastOrderUpdate(savedOrder, MessageType.NEW_ITEM);
 
         log.info("First order created | orderId={} | restaurantId={} | tableId={} | sessionId={}",
                 savedOrder.getOrderId(), savedOrder.getRestaurantId(),
@@ -113,22 +109,18 @@ public class OrderService {
 
 
     @Transactional
-    @Operation(
-            summary = "Add new items",
-            description = "Adds items to the existing running order of an active table session."
-    )
     public OrderResponse addNewItems(String sessionToken, AddItemRequest request) {
 
         TableSessionResponse session = validateAndGetActiveSession(sessionToken);
 
         validateAddItemRequest(request);
 
-        Order order = orderRepository.findBySessionId(session.getSessionId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "No running order exists for this table session."));
+        Order order = orderRepository.findByRestaurantIdAndTableNumberAndStatusIn(
+                        session.getRestaurantId(), session.getTableNumber(), RUNNING_STATUSES)
+                       .orElseThrow(() -> new IllegalStateException(
+                                "No running order exists for this table."));
 
         validateOrderBelongsToSession(order, session);
-
         validateOrderModifiable(order);
 
         OrderStatus previousStatus = order.getStatus();
@@ -143,7 +135,7 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(savedOrder, "NEW_ITEM");
+        broadcastOrderUpdate(savedOrder, MessageType.NEW_ITEM);
 
         log.info("Items added | orderId={} | sessionId={} | previousStatus={} | newStatus={}",
                 savedOrder.getOrderId(), session.getSessionId(),
@@ -154,19 +146,14 @@ public class OrderService {
 
 
     @Transactional
-    @Operation(
-            summary = "Remove order item",
-            description = "Removes an item from a pending order belonging to the active table session."
-    )
     public OrderResponse removeItem(String sessionToken, RemoveItemRequest request) {
 
         TableSessionResponse session = validateAndGetActiveSession(sessionToken);
 
         validateRemoveItemRequest(request);
 
-        Order order = orderRepository.findById(request.getId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "Order not found with id: " + request.getId()));
+        OrderItem item = getOrderItem(request.getItemId());
+        Order order = item.getOrder();
 
         validateOrderBelongsToSession(order, session);
 
@@ -176,65 +163,73 @@ public class OrderService {
             );
         }
 
-        OrderItem item = orderItemRepository.findById(request.getItemId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "Order item not found with id: " + request.getItemId()));
-
-        if (item.getOrder() == null || !Objects.equals(item.getOrder().getId(), order.getId())) {
-            throw new IllegalStateException(
-                    "Order item does not belong to the requested order.");
-        }
-
-        order.getItems().remove(item);
-
-        orderItemRepository.delete(item);
+        removeItemFromOrder(order, item);
 
         if (order.getItems().isEmpty()) {
-            order.setSubtotal(BigDecimal.ZERO);
-            order.setTaxAmount(BigDecimal.ZERO);
-            order.setTotalAmount(BigDecimal.ZERO);
+            orderRepository.delete(order);
 
-            order.setStatus(OrderStatus.COMPLETED);
-            order.setCompletedAt(LocalDateTime.now());
+            OrderSnapshotResponse snapshot = mapper.toSnapshot(order);
 
-        } else {
-            recalculateTotals(order);
+            broadcastSnapshot(snapshot, order.getRestaurantId(), order.getTableNumber(),
+                    MessageType.REMOVE_ITEM,
+                    order.getOrderId()
+            );
+
+            log.info(
+                    "Customer removed final item; empty order deleted | orderId={} | orderItemId={}",
+                    order.getOrderId(),
+                    request.getItemId()
+            );
+
+            return mapper.toOrderResponse(order);
         }
+
+        recalculateTotals(order);
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(savedOrder, "ITEM_REMOVED");
+        broadcastOrderUpdate(savedOrder, MessageType.REMOVE_ITEM);
+
+        log.info(
+                "Customer removed item | orderId={} | orderItemId={}",
+                savedOrder.getOrderId(),
+                request.getItemId()
+        );
 
         return mapper.toOrderResponse(savedOrder);
     }
 
-
+    // ---------------------------------------------------------
+    // UPDATE ORDER STATUS - RESTAURANT
+    // ---------------------------------------------------------
 
     @Transactional
-    @Operation(
-            summary = "Update order status",
-            description = "Updates the status of an order and broadcasts the updated order."
-    )
-    public OrderResponse updateStatusByOrderId(Long restaurantId, Long orderId, OrderStatus newStatus) {
+    public OrderResponse updateStatusByOrderId(
+            Long restaurantId,
+            String orderId,
+            OrderStatus newStatus) {
 
-        validatePositiveId(restaurantId, "Restaurant ID");
 
-        validatePositiveId(orderId, "Order ID");
 
         if (newStatus == null) {
-            throw new IllegalArgumentException("Order status cannot be null.");
+            throw new IllegalArgumentException(
+                    "Order status cannot be null."
+            );
         }
 
-        Order order = orderRepository.findById(orderId)
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "Order not found with id: " + orderId));
+        Order order = getOrderByDatabaseId(orderId);
 
         if (!Objects.equals(order.getRestaurantId(), restaurantId)) {
             throw new IllegalStateException(
-                    "Order does not belong to the requested restaurant.");
+                    "Order does not belong to the requested restaurant."
+            );
         }
 
-        validateStatusTransition(order.getStatus(), newStatus, order.isPayment());
+        validateStatusTransition(
+                order.getStatus(),
+                newStatus,
+                order.isPayment()
+        );
 
         OrderStatus previousStatus = order.getStatus();
 
@@ -246,29 +241,37 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(savedOrder, "UPDATE_STATUS");
+        broadcastOrderUpdate(savedOrder, MessageType.UPDATE_STATUS);
 
-        log.info("Order status updated | restaurantId={} | orderId={} | {} -> {}",
-                restaurantId, orderId, previousStatus, newStatus);
+        log.info(
+                "Order status updated | restaurantId={} | orderId={} | {} -> {}",
+                restaurantId,
+                orderId,
+                previousStatus,
+                newStatus
+        );
 
         return mapper.toOrderResponse(savedOrder);
     }
 
 
     @Transactional
-    public OrderResponse updateStatusByOrderId(Long orderId, OrderStatus newStatus) {
+    public OrderResponse updateStatusByOrderId(String orderId, OrderStatus newStatus) {
 
-        validatePositiveId(orderId, "Order ID");
 
         if (newStatus == null) {
-            throw new IllegalArgumentException("Order status cannot be null.");
+            throw new IllegalArgumentException(
+                    "Order status cannot be null."
+            );
         }
 
-        Order order = orderRepository.findById(orderId)
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "Order not found with id: " + orderId));
+        Order order = getOrderByDatabaseId(orderId);
 
-        validateStatusTransition(order.getStatus(), newStatus, order.isPayment());
+        validateStatusTransition(
+                order.getStatus(),
+                newStatus,
+                order.isPayment()
+        );
 
         order.setStatus(newStatus);
 
@@ -278,41 +281,33 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(savedOrder, "UPDATE_STATUS");
+        broadcastOrderUpdate(savedOrder, MessageType.UPDATE_STATUS);
 
         return mapper.toOrderResponse(savedOrder);
     }
 
-
     @Transactional
-    @Operation(summary = "Add items by restaurant",
-            description = "Allows Staff/Owner to add items to an existing restaurant order."
-    )
-    public OrderResponse addItemsByRestaurant(Long restaurantId, AddItemRequest request, MessageType messageType) {
-
-        validatePositiveId(restaurantId, "Restaurant ID");
+    public OrderResponse addItemsByRestaurant(
+            Long restaurantId,
+            String orderId,
+            AddItemRequest request,
+            MessageType messageType) {
 
         validateAddItemRequest(request);
 
-        if (messageType == null) {
-            throw new IllegalArgumentException("Message type is required.");
-        }
-
-        if (messageType != MessageType.ADD_ITEM && messageType != MessageType.NEW_ITEM) {
+        if (messageType != MessageType.ADD_ITEM
+                && messageType != MessageType.NEW_ITEM) {
             throw new IllegalArgumentException(
-                    "Invalid message type for adding items: " + messageType);
+                    "Invalid message type for adding items. Allowed types: ADD_ITEM, NEW_ITEM."
+            );
         }
 
-        Long orderId = request.getId();
-        validatePositiveId(orderId, "Order ID");
-
-        Order order = orderRepository.findById(orderId)
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "Order not found with id: " + orderId));
+        Order order = getOrderByDatabaseId(orderId);
 
         if (!Objects.equals(order.getRestaurantId(), restaurantId)) {
             throw new IllegalStateException(
-                    "Order does not belong to the requested restaurant.");
+                    "Order does not belong to the requested restaurant."
+            );
         }
 
         validateOrderModifiable(order);
@@ -329,7 +324,7 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(savedOrder, messageType.name());
+        broadcastOrderUpdate(savedOrder, messageType);
 
         log.info("Staff/Owner added items | restaurantId={} | orderId={} | previousStatus={} | newStatus={}",
                 restaurantId, savedOrder.getOrderId(), previousStatus, savedOrder.getStatus());
@@ -337,61 +332,45 @@ public class OrderService {
         return mapper.toOrderResponse(savedOrder);
     }
 
-
-
     @Transactional
-    @Operation(
-            summary = "Remove item by restaurant",
-            description = "Allows Staff/Owner to remove an item from an order belonging to their restaurant."
-    )
-    public OrderResponse removeItemByRestaurant(Long restaurantId, RemoveItemRequest request) {
-
-        validatePositiveId(restaurantId, "Restaurant ID");
+    public OrderResponse removeItemByRestaurant(
+            Long restaurantId,
+            RemoveItemRequest request) {
 
         validateRemoveItemRequest(request);
 
-        Order order = orderRepository.findById(request.getId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "Order not found with id: " + request.getId()));
+        OrderItem item = getOrderItem(request.getItemId());
+        Order order = item.getOrder();
 
         if (!Objects.equals(order.getRestaurantId(), restaurantId)) {
-            throw new IllegalStateException("Order does not belong to the requested restaurant.");
+            throw new IllegalStateException(
+                    "Order does not belong to the requested restaurant.");
         }
 
         validateOrderModifiable(order);
 
-        OrderItem item = orderItemRepository.findById(request.getItemId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "Order item not found with id: "
-                                                + request.getItemId()));
-
-        if (item.getOrder() == null || !Objects.equals(item.getOrder().getId(), order.getId())) {
-            throw new IllegalStateException("Order item does not belong to the requested order.");
-        }
-
-        if (order.isPayment()) {
-            throw new IllegalStateException("Paid order cannot be modified.");
-        }
-
-        order.getItems().remove(item);
-
-        orderItemRepository.delete(item);
+        removeItemFromOrder(order, item);
 
         if (order.getItems().isEmpty()) {
+            orderRepository.delete(order);
 
-            order.setSubtotal(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            order.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            order.setTotalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            OrderSnapshotResponse snapshot = mapper.toSnapshot(order);
 
-            order.setStatus(OrderStatus.PENDING);
+            broadcastSnapshot(snapshot,
+                    order.getRestaurantId(), order.getTableNumber(),
+                    MessageType.REMOVE_ITEM, order.getOrderId());
 
-        } else {
-            recalculateTotals(order);
+            log.info("Staff/Owner removed final item; empty order deleted | orderId={}",
+                    order.getOrderId());
+
+            return mapper.toOrderResponse(order);
         }
+
+        recalculateTotals(order);
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(savedOrder, "ITEM_REMOVED");
+        broadcastOrderUpdate(savedOrder, MessageType.REMOVE_ITEM);
 
         log.info("Staff/Owner removed item | restaurantId={} | orderId={} | orderItemId={}",
                 restaurantId, savedOrder.getOrderId(), request.getItemId());
@@ -399,19 +378,10 @@ public class OrderService {
         return mapper.toOrderResponse(savedOrder);
     }
 
-
     @Transactional
-    @Operation(
-            summary = "Mark payment successful",
-            description = "Marks an order as paid and completes the order."
-    )
-    public OrderResponse markPaymentSuccess(Long orderId) {
+    public OrderResponse markPaymentSuccess(String orderId) {
 
-        validatePositiveId(orderId, "Order ID");
-
-        Order order = orderRepository.findById(orderId)
-                        .orElseThrow(() -> new IllegalStateException(
-                                        "Order not found with id: " + orderId));
+        Order order = getOrderByDatabaseId(orderId);
 
         if (order.isPayment()) {
             return mapper.toOrderResponse(order);
@@ -423,54 +393,38 @@ public class OrderService {
         }
 
         order.setPayment(true);
+        order.setPaidAt(LocalDateTime.now());
         order.setStatus(OrderStatus.COMPLETED);
         order.setCompletedAt(LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(savedOrder, "ORDER_COMPLETED");
+        broadcastOrderUpdate(savedOrder, MessageType.UPDATE_STATUS);
 
-        log.info("Payment completed | orderId={} | restaurantId={}",
-                savedOrder.getOrderId(), savedOrder.getRestaurantId());
+        log.info(
+                "Payment marked successful | orderId={} | restaurantId={}",
+                savedOrder.getOrderId(),
+                savedOrder.getRestaurantId()
+        );
 
         return mapper.toOrderResponse(savedOrder);
     }
 
-
     @Transactional
-    public void paymentSuccess(Long orderId) {
+    public void paymentSuccess(String orderId) {
         markPaymentSuccess(orderId);
     }
 
-
-    @Transactional
-    @Operation(
-            summary = "Check running order",
-            description = "Returns the running order for a restaurant table."
-    )
+    @Transactional(readOnly = true)
     public OrderSnapshotResponse checkRunningOrder(Long restaurantId, Long tableNumber) {
 
-        validatePositiveId(restaurantId, "Restaurant ID");
-
-        validatePositiveId(tableNumber, "Table number");
-
-        Optional<Order> runningOrder = orderRepository.findByRestaurantIdAndTableNumberAndStatusIn(
-                                restaurantId, tableNumber, RUNNING_STATUSES);
-
-        return runningOrder
+        return orderRepository.findByRestaurantIdAndTableNumberAndStatusIn(
+                        restaurantId, tableNumber, RUNNING_STATUSES)
                 .map(mapper::toSnapshot)
                 .orElse(null);
     }
 
-
-    /**
-     * Checks whether a table already has a running order.
-     */
-    @Operation(
-            summary = "Check running order status",
-            description = "Checks whether a restaurant table already has a running order."
-    )
-    public MessageResponse checkRunningOrderStatus(Long restaurantId, Long tableNumber ) {
+    public MessageResponse checkRunningOrderStatus(Long restaurantId, Long tableNumber) {
 
         OrderSnapshotResponse snapshot = checkRunningOrder(restaurantId, tableNumber);
 
@@ -482,101 +436,79 @@ public class OrderService {
     }
 
     public MessageResponse checkRunningOrderByToken(String sessionToken) {
-
         TableSessionResponse session = validateAndGetActiveSession(sessionToken);
         return checkRunningOrderStatus(session.getRestaurantId(), session.getTableNumber());
     }
 
-
-    @Transactional
-    @Operation(summary = "Get running orders",
-            description = "Returns PENDING, PREPARING and SERVED orders for a restaurant."
-    )
+    @Transactional(readOnly = true)
     public List<OrderListResponse> getRunningOrders(Long restaurantId) {
 
-        validatePositiveId(restaurantId, "Restaurant ID");
-
         List<Order> orders = orderRepository.findByRestaurantIdAndStatusInOrderByCreatedAtDesc(
-                                restaurantId, RUNNING_STATUSES);
+                        restaurantId, RUNNING_STATUSES);
 
         if (orders == null || orders.isEmpty()) {
             return Collections.emptyList();
         }
 
-        return orders.stream().filter(Objects::nonNull)
+        return orders.stream()
+                .filter(Objects::nonNull)
                 .map(mapper::toListResponse)
                 .toList();
     }
 
-    @Transactional
-    @Operation(
-            summary = "Get completed orders",
-            description = "Returns paginated completed order history."
-    )
-    public Page<OrderListResponse> getOrders(Long restaurantId, Pageable pageable) {
 
-        validatePositiveId(restaurantId, "Restaurant ID");
+    @Transactional(readOnly = true)
+    public Page<OrderListResponse> getOrders(Long restaurantId, Pageable pageable) {
 
         Pageable safePageable = createSafePageable(pageable);
 
         Page<Order> orders = orderRepository.findByRestaurantIdAndStatusOrderByCreatedAtDesc(
-                                restaurantId, OrderStatus.COMPLETED, safePageable);
+                        restaurantId, OrderStatus.COMPLETED, safePageable);
 
         return orders.map(mapper::toListResponse);
     }
 
     public Page<OrderListResponse> getOrders(Long restaurantId) {
+
         return getOrders(restaurantId,
-                PageRequest.of(
-                        0,
-                        9,
-                        Sort.by(Sort.Direction.DESC,
-                                "createdAt")));
+                PageRequest.of(0, 9,
+                        Sort.by(Sort.Direction.DESC, "createdAt")));
     }
 
-    @Transactional
-    @Operation(
-            summary = "Get order",
-            description = "Returns detailed information about an order."
-    )
+    @Transactional(readOnly = true)
     public OrderResponse getOrder(Long restaurantId, String orderId) {
-
-        validatePositiveId(restaurantId, "Restaurant ID");
-
         validateOrderId(orderId);
 
-        Order order = orderRepository.findByRestaurantIdAndOrderId(
-                                restaurantId, orderId);
-
-        if (order == null) {
-            throw new IllegalStateException(
-                    "Order not found with id: "
-                            + orderId
-                            + " for restaurant: "
-                            + restaurantId);
-        }
+        Order order = orderRepository
+                .findByRestaurantIdAndOrderId(restaurantId, orderId)
+                .orElseThrow(() ->
+                        new IllegalStateException(
+                                "Order not found for restaurant: " + restaurantId));
 
         return mapper.toOrderResponse(order);
     }
 
+    // ---------------------------------------------------------
+    // TABLE SESSION VALIDATION
+    // ---------------------------------------------------------
 
-    @Transactional
-    public TableSessionResponse validateAndGetActiveSession(String sessionToken) {
+    @Transactional(readOnly = true)
+    public TableSessionResponse validateAndGetActiveSession(
+            String sessionToken) {
 
         if (sessionToken == null || sessionToken.isBlank()) {
-            throw new IllegalArgumentException("Session token is required.");
+            throw new IllegalArgumentException(
+                    "Session token is required."
+            );
         }
 
-        final String token = sessionToken.trim();
+        String token = sessionToken.trim();
 
         TableSessionResponse session;
 
         try {
-
             session = tableSessionClient.getSession(token);
-
         } catch (Exception ex) {
-
             log.error("Failed to retrieve table session from Table Service | token={}",
                     maskToken(token), ex);
 
@@ -592,24 +524,8 @@ public class OrderService {
         return session;
     }
 
-
     private void validateSessionData(TableSessionResponse session, String requestedToken) {
 
-        if (session.getSessionId() == null || session.getSessionId() <= 0) {
-            throw new IllegalStateException("Invalid table session ID.");
-        }
-
-        if (session.getRestaurantId() == null || session.getRestaurantId() <= 0) {
-            throw new IllegalStateException("Invalid restaurant ID returned by Table Service.");
-        }
-
-        if (session.getTableId() == null || session.getTableId() <= 0) {
-            throw new IllegalStateException("Invalid table ID returned by Table Service.");
-        }
-
-        if (session.getTableNumber() == null || session.getTableNumber() <= 0) {
-            throw new IllegalStateException("Invalid table number returned by Table Service.");
-        }
 
         if (session.getSessionToken() == null || session.getSessionToken().isBlank()) {
             throw new IllegalStateException("Table Service returned an empty session token.");
@@ -626,8 +542,8 @@ public class OrderService {
         if (session.getSessionStatus() != SessionStatus.ACTIVE) {
             throw new IllegalStateException("Table session is not active.");
         }
-
     }
+
 
     private void addItemsToOrder(Order order, AddItemRequest request) {
 
@@ -637,67 +553,157 @@ public class OrderService {
 
         validateAddItemRequest(request);
 
+        if (order.getItems() == null) {
+            order.setItems(new ArrayList<>());
+        }
+
         for (OrderItemDTO dto : request.getItems()) {
 
             validateItem(dto);
 
-            Optional<OrderItem> existingItem = order.getItems()
-                            .stream()
-                            .filter(Objects::nonNull)
-                            .filter(item ->
-                                    Objects.equals(
-                                            item.getId(),
-                                            dto.getItemId()))
-                            .findFirst();
+            String currency = normalizeCurrency(dto.getCurrency());
 
-            if (existingItem.isPresent()) {
+            OrderItem newItem = OrderItem.builder()
+                    .order(order)
+                    .name(dto.getName().trim())
+                    .price(dto.getPrice())
+                    .quantity(dto.getQuantity())
+                    .imageUrl(dto.getImageUrl())
+                    .currency(currency)
+                    .build();
 
-                OrderItem item = existingItem.get();
-
-                int currentQuantity = item.getQuantity() == null ? 0 : item.getQuantity();
-
-                long newQuantity = (long) currentQuantity + dto.getQuantity();
-
-                if (newQuantity > Integer.MAX_VALUE) {
-                    throw new IllegalArgumentException("Item quantity is too large.");
-                }
-
-                item.setQuantity((int) newQuantity);
-
-            } else {
-
-                OrderItem newItem = OrderItem.builder()
-                                .order(order)
-                                .id(dto.getItemId())
-                                .name(dto.getName().trim())
-                                .price(dto.getPrice())
-                                .quantity(dto.getQuantity())
-                                .imageUrl(dto.getImageUrl())
-                                .currency(dto.getCurrency() == null ||
-                                                dto.getCurrency().isBlank()
-                                                ? DEFAULT_CURRENCY
-                                                : dto.getCurrency()
-                                                  .trim()
-                                                  .toUpperCase())
-                                .build();
-
-                order.getItems().add(newItem);
-            }
+            order.getItems().add(newItem);
         }
     }
 
 
+    private void removeItemFromOrder(Order order, OrderItem item) {
+
+        if (order == null || item == null) {
+            throw new IllegalArgumentException(
+                    "Order and order item are required.");
+        }
+
+        if (order.getItems() != null) {
+            order.getItems().removeIf(existing -> existing != null
+                            && Objects.equals(existing.getId(), item.getId()));
+        }
+
+    }
+
+    private OrderItem getOrderItem(Long orderItemId) {
+        return orderItemRepository.findById(orderItemId)
+                .orElseThrow(() -> new IllegalStateException(
+                                "Order item not found with id: " + orderItemId));
+    }
+
+    private Order getOrderByDatabaseId(String orderId) {
+        return orderRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new IllegalStateException(
+                                "Order not found with id: " + orderId));
+    }
+
+
+    private void validateOrderBelongsToSession(Order order, TableSessionResponse session) {
+
+        if (order == null || session == null) {
+            throw new IllegalArgumentException("Order and table session are required.");
+        }
+
+        if (!Objects.equals(order.getRestaurantId(), session.getRestaurantId())) {
+            throw new IllegalStateException("Order does not belong to this restaurant.");
+        }
+
+        if (!Objects.equals(order.getTableId(), session.getTableId())) {
+            throw new IllegalStateException("Order does not belong to this table.");
+        }
+
+        if (!Objects.equals(order.getSessionId(), session.getSessionId())) {
+            throw new IllegalStateException("Order does not belong to this table session.");
+        }
+
+        if (!Objects.equals(order.getSessionToken(), session.getSessionToken())) {
+            throw new IllegalStateException("Order session token mismatch.");
+        }
+    }
+
+    private void validateOrderModifiable(Order order) {
+
+        if (order == null || order.getStatus() == null) {
+            throw new IllegalStateException(
+                    "Order or order status is missing.");
+        }
+
+        if (order.isPayment()) {
+            throw new IllegalStateException(
+                    "Paid order cannot be modified.");
+        }
+
+        if (order.getStatus() == OrderStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Completed order cannot be modified.");
+        }
+    }
+
+
+    private void validateStatusTransition(OrderStatus current, OrderStatus requested, boolean paymentCompleted) {
+
+        if (current == null) {
+            throw new IllegalStateException(
+                    "Current order status is missing.");
+        }
+
+        if (requested == null) {
+            throw new IllegalArgumentException(
+                    "New order status is required.");
+        }
+
+        if (current == requested) {
+            throw new IllegalStateException(
+                    "Order is already in status " + requested);
+        }
+
+        if (current == OrderStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Completed order cannot be modified.");
+        }
+
+        if (requested == OrderStatus.COMPLETED && !paymentCompleted) {
+            throw new IllegalStateException(
+                    "Order cannot be completed before payment.");
+        }
+
+        boolean valid = switch (current) {
+            case PENDING ->
+                    requested == OrderStatus.PREPARING;
+
+            case PREPARING ->
+                    requested == OrderStatus.SERVED;
+
+            case SERVED ->
+                    requested == OrderStatus.PREPARING
+                            || requested == OrderStatus.COMPLETED;
+
+            case COMPLETED -> false;
+        };
+
+        if (!valid) {
+            throw new IllegalStateException("Invalid order status transition: "
+                            + current + " -> " + requested);
+        }
+    }
 
     private void recalculateTotals(Order order) {
 
         if (order == null) {
-            throw new IllegalArgumentException("Order cannot be null.");
+            throw new IllegalArgumentException(
+                    "Order cannot be null."
+            );
         }
 
         BigDecimal subtotal = BigDecimal.ZERO;
 
         if (order.getItems() != null) {
-
             for (OrderItem item : order.getItems()) {
 
                 if (item == null) {
@@ -706,8 +712,7 @@ public class OrderService {
 
                 validatePersistedItem(item);
 
-                BigDecimal lineTotal = item.getPrice().multiply(
-                                        BigDecimal.valueOf(item.getQuantity()));
+                BigDecimal lineTotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
 
                 subtotal = subtotal.add(lineTotal);
             }
@@ -717,16 +722,13 @@ public class OrderService {
 
         BigDecimal taxPercentage = resolveTaxPercentage();
 
-        BigDecimal taxAmount = subtotal
-                        .multiply(taxPercentage)
-                        .divide(BigDecimal.valueOf(100),
-                                2,
-                                RoundingMode.HALF_UP);
+        BigDecimal taxAmount = subtotal.multiply(taxPercentage).divide(
+                        BigDecimal.valueOf(100),
+                        2,
+                        RoundingMode.HALF_UP);
 
-        BigDecimal totalAmount = subtotal
-                            .add(taxAmount)
-                            .setScale(2,
-                                    RoundingMode.HALF_UP);
+        BigDecimal totalAmount = subtotal.add(taxAmount)
+                .setScale(2, RoundingMode.HALF_UP);
 
         order.setSubtotal(subtotal);
         order.setTaxPercentage(taxPercentage);
@@ -734,95 +736,30 @@ public class OrderService {
         order.setTotalAmount(totalAmount);
     }
 
-    private void validateOrderBelongsToSession(Order order, TableSessionResponse session) {
+    private void validatePersistedItem(OrderItem item) {
 
-        if (order == null || session == null) {
-            throw new IllegalArgumentException(
-                    "Order and table session are required.");
+        if (item.getPrice() == null || item.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalStateException("Order contains an invalid item price.");
         }
 
-        if (!Objects.equals(order.getRestaurantId(), session.getRestaurantId())) {
-            throw new IllegalStateException(
-                    "Order does not belong to this restaurant.");
+        if (item.getQuantity() == null || item.getQuantity() <= 0 || item.getQuantity() > MAX_ITEM_QUANTITY) {
+            throw new IllegalStateException("Order contains an invalid item quantity.");
         }
 
-        if (!Objects.equals(order.getTableId(), session.getTableId())) {
-            throw new IllegalStateException("Order does not belong to this table.");
-        }
-
-        if (!Objects.equals(order.getSessionId(), session.getSessionId())) {
-            throw new IllegalStateException(
-                    "Order does not belong to this table session.");
-        }
-
-        if (!Objects.equals(order.getSessionToken(), session.getSessionToken())) {
-            throw new IllegalStateException("Order session token mismatch.");
+        if (item.getName() == null || item.getName().isBlank()) {
+            throw new IllegalStateException("Order contains an item without a name.");
         }
     }
 
+    private BigDecimal resolveTaxPercentage() {
 
-    private void validateOrderModifiable(Order order) {
-
-        if (order.getStatus() == null) {
-            throw new IllegalStateException("Order status is missing.");
+        if (defaultTaxPercentage == null || defaultTaxPercentage.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalStateException("Configured tax percentage cannot be null or negative.");
         }
 
-        if (order.isPayment()) {
-            throw new IllegalStateException("Paid order cannot be modified.");
-        }
-
-        if (order.getStatus() == OrderStatus.COMPLETED) {
-            throw new IllegalStateException("Completed order cannot be modified.");
-        }
+        return defaultTaxPercentage.setScale(2, RoundingMode.HALF_UP);
     }
 
-    private void validateStatusTransition(OrderStatus current, OrderStatus requested, boolean paymentCompleted) {
-
-        if (current == null) {
-            throw new IllegalStateException("Current order status is missing.");
-        }
-
-        if (requested == null) {
-            throw new IllegalArgumentException("New order status is required.");
-        }
-
-        if (current == requested) {
-            throw new IllegalStateException("Order is already in status " + requested);
-        }
-
-        if (current == OrderStatus.COMPLETED) {
-            throw new IllegalStateException("Completed order cannot be modified.");
-        }
-
-        if (requested == OrderStatus.COMPLETED && !paymentCompleted) {
-            throw new IllegalStateException("Order cannot be completed before payment.");
-        }
-
-        boolean valid;
-
-        valid = switch (current) {
-
-            case PENDING ->
-                    requested == OrderStatus.PREPARING;
-
-            case PREPARING ->
-                    requested == OrderStatus.SERVED;
-
-            case SERVED ->
-                    requested == OrderStatus.PREPARING ||
-                            requested == OrderStatus.COMPLETED;
-
-            case COMPLETED ->
-                    false;
-        };
-
-        if (!valid) {
-            throw new IllegalStateException("Invalid order status transition: "
-                            + current
-                            + " -> "
-                            + requested);
-        }
-    }
 
     private void validateAddItemRequest(AddItemRequest request) {
 
@@ -833,8 +770,15 @@ public class OrderService {
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("At least one order item is required.");
         }
-    }
 
+        if (request.getItems().size() > 100) {
+            throw new IllegalArgumentException("Cannot submit more than 100 items at once.");
+        }
+
+        if (request.getItems().stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("Order item cannot be null.");
+        }
+    }
 
     private void validateItem(OrderItemDTO item) {
 
@@ -842,42 +786,34 @@ public class OrderService {
             throw new IllegalArgumentException("Order item cannot be null.");
         }
 
-        validatePositiveId(item.getItemId(), "Item ID");
-
         if (item.getName() == null || item.getName().isBlank()) {
             throw new IllegalArgumentException("Item name is required.");
         }
 
-        if (item.getPrice() == null || item.getPrice().compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Item price cannot be negative.");
+        if (item.getName().trim().length() > 255) {
+            throw new IllegalArgumentException("Item name cannot exceed 255 characters.");
         }
-
-        if (item.getQuantity() == null || item.getQuantity() <= 0) {
-            throw new IllegalArgumentException("Item quantity must be greater than zero.");
-        }
-
-        if (item.getQuantity() > 1000) {
-            throw new IllegalArgumentException("Item quantity cannot exceed 1000.");
-        }
-
-        if (item.getCurrency() != null && !item.getCurrency().isBlank() && item.getCurrency().trim().length() != 3) {
-            throw new IllegalArgumentException("Currency must be a valid 3-letter currency code.");
-        }
-    }
-
-
-    private void validatePersistedItem(OrderItem item) {
 
         if (item.getPrice() == null || item.getPrice().compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalStateException("Order contains an invalid item price.");
+            throw new IllegalArgumentException("Item price cannot be null or negative.");
         }
 
-        if (item.getQuantity() == null || item.getQuantity() <= 0) {
-            throw new IllegalStateException(
-                    "Order contains an invalid item quantity.");
+        if (item.getQuantity() == null || item.getQuantity() <= 0
+                || item.getQuantity() > MAX_ITEM_QUANTITY) {
+            throw new IllegalArgumentException("Item quantity must be between 1 and "
+                            + MAX_ITEM_QUANTITY + ".");
+        }
+
+        if (item.getCurrency() != null && !item.getCurrency().isBlank()
+                && item.getCurrency().trim().length() != 3) {
+            throw new IllegalArgumentException(
+                    "Currency must be a 3-letter code.");
+        }
+
+        if (item.getImageUrl() != null && item.getImageUrl().length() > 2048) {
+            throw new IllegalArgumentException("Image URL cannot exceed 2048 characters.");
         }
     }
-
 
     private void validateRemoveItemRequest(RemoveItemRequest request) {
 
@@ -885,62 +821,112 @@ public class OrderService {
             throw new IllegalArgumentException("Remove item request cannot be null.");
         }
 
-        validatePositiveId(request.getId(), "Order ID");
+        if (request.getOrderId() == null || request.getOrderId().isBlank()) {
+            throw new IllegalArgumentException("Order ID is required");
+        }
 
-        validatePositiveId(request.getItemId(), "Order item ID");
+        if (request.getItemId() == null || request.getItemId() <= 0) {
+            throw new IllegalArgumentException("Item ID must be positive");
+        }
+
     }
 
-
     private void validateOrderId(String orderId) {
+
         if (orderId == null || orderId.isBlank()) {
             throw new IllegalArgumentException("Order ID is required.");
         }
-    }
 
-
-    private void validatePositiveId(Long id, String fieldName) {
-        if (id == null || id <= 0) {
-            throw new IllegalArgumentException(fieldName + " must be greater than zero.");
+        if (orderId.length() > 36) {
+            throw new IllegalArgumentException("Order ID cannot exceed 36 characters.");
         }
     }
 
-    private void broadcastOrderUpdate(Order order, String messageType) {
+
+    private String normalizeCurrency(String currency) {
+
+        if (currency == null || currency.isBlank()) {
+            return DEFAULT_CURRENCY;
+        }
+
+        String normalized = currency.trim().toUpperCase(Locale.ROOT);
+
+        if (normalized.length() != 3) {
+            throw new IllegalArgumentException(
+                    "Currency must be a 3-letter code.");
+        }
+
+        return normalized;
+    }
+
+
+    private void broadcastOrderUpdate(Order order, MessageType messageType) {
 
         OrderSnapshotResponse snapshot = mapper.toSnapshot(order);
 
-        WsMessage<OrderSnapshotResponse> message = new WsMessage<>(messageType, snapshot);
+        broadcastSnapshot(
+                snapshot,
+                order.getRestaurantId(),
+                order.getTableNumber(),
+                messageType,
+                order.getOrderId()
+        );
+    }
 
-        push.broadcastToTable(order.getRestaurantId(), order.getTableNumber(), message);
+    private void broadcastSnapshot(OrderSnapshotResponse snapshot,
+            Long restaurantId, Long tableNumber, MessageType messageType, String publicOrderId) {
 
-        push.broadcastToStaff(order.getRestaurantId(), message);
+        Runnable pushTask = () -> {
+            try {
+                WsMessage<OrderSnapshotResponse> message =
+                        new WsMessage<>(messageType.name(), snapshot);
 
-        log.debug("Order update broadcast | type={} | orderId={} | restaurantId={} | tableNumber={}",
-                messageType, order.getOrderId(), order.getRestaurantId(), order.getTableNumber());
+                push.broadcastToTable(restaurantId, tableNumber, message);
+
+                push.broadcastToStaff(restaurantId, message);
+
+                log.debug("Order update broadcast | type={} | orderId={} | restaurantId={} | tableNumber={}",
+                        messageType, publicOrderId, restaurantId, tableNumber);
+
+            } catch (Exception ex) {
+                log.error("Failed to broadcast order update | type={} | orderId={}",
+                        messageType, publicOrderId, ex);
+            }
+        };
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            pushTask.run();
+                        }
+                    }
+            );
+        } else {
+            pushTask.run();
+        }
     }
 
 
     private Pageable createSafePageable(Pageable pageable) {
 
         if (pageable == null) {
-            return PageRequest.of(0, 9,
-                    Sort.by(Sort.Direction.DESC, "createdAt"));
+            return PageRequest.of(
+                    0,
+                    9,
+                    Sort.by(Sort.Direction.DESC, "createdAt")
+            );
         }
 
         int page = Math.max(pageable.getPageNumber(), 0);
-
         int size = Math.min(Math.max(pageable.getPageSize(), 1), 100);
 
-        return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-    }
-
-
-    private BigDecimal resolveTaxPercentage() {
-
-        if (defaultTaxPercentage == null || defaultTaxPercentage.compareTo(BigDecimal.ZERO) < 0) {
-            return BigDecimal.ZERO;
-        }
-
-        return defaultTaxPercentage.setScale(2, RoundingMode.HALF_UP);
+        return PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
     }
 
     private String maskToken(String token) {
@@ -951,9 +937,6 @@ public class OrderService {
 
         return token.substring(0, 4)
                 + "***"
-                + token.substring(
-                token.length() - 4
-        );
+                + token.substring(token.length() - 4);
     }
 }
-

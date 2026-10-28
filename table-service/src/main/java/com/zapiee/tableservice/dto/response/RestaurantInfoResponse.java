@@ -17,8 +17,8 @@ import java.time.LocalDateTime;
 public class RestaurantInfoResponse {
 
     private Long restaurantId;
-    private BigDecimal latitude;
-    private BigDecimal longitude;
+    private Double latitude;
+    private Double longitude;
 
 
 }

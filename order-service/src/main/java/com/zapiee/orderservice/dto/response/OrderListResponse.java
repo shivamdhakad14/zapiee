@@ -15,10 +15,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(
-        name = "Order List Response",
-        description = "Order summary returned when listing orders."
-)
+@Schema(description = "Order summary for order listings")
 public class OrderListResponse {
 
     private Long id;
@@ -26,16 +23,19 @@ public class OrderListResponse {
     private Long restaurantId;
     private Long tableId;
     private Long tableNumber;
+
     private OrderStatus status;
+
     private BigDecimal subtotal;
     private BigDecimal taxPercentage;
     private BigDecimal taxAmount;
     private BigDecimal totalAmount;
 
-    @Builder.Default
-    private String currency = "INR";
+    private String currency;
     private boolean payment;
+
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
+
     private List<OrderItemResponse> items;
 }

@@ -1,6 +1,5 @@
 package com.zapiee.orderservice.dto.response;
 
-import com.zapiee.orderservice.dto.response.OrderItemResponse;
 import com.zapiee.orderservice.enums.OrderStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
@@ -16,10 +15,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(
-        name = "Order Response",
-        description = "Detailed order information returned by the Order Service."
-)
+@Schema(description = "Detailed order response")
 public class OrderResponse {
 
     private String orderId;
@@ -27,18 +23,22 @@ public class OrderResponse {
     private Long tableId;
     private Long tableNumber;
     private String sessionToken;
+
     private OrderStatus status;
+
     private BigDecimal subtotal;
     private BigDecimal taxPercentage;
     private BigDecimal taxAmount;
     private BigDecimal totalAmount;
 
-    @Builder.Default
-    private String currency = "INR";
+    @Schema(example = "INR")
+    private String currency;
+
     private boolean payment;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime completedAt;
+
     private List<OrderItemResponse> items;
 }
-

@@ -74,7 +74,7 @@ public class RestaurantService {
 
         Restaurant savedRestaurant = restaurantRepository.save(restaurant);
 
-        authClient.assignRoleOwnerToUser(ownerId);
+//        authClient.assignRoleOwnerToUser(ownerId);
 
         log.info("Restaurant saved. restaurantId={}, ownerId={}",
                 savedRestaurant.getId(), ownerId);

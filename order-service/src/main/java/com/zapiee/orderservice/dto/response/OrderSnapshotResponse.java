@@ -15,30 +15,27 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Schema(
-        name = "Order Snapshot Response",
-        description = "Current snapshot of an order sent through the Order Service WebSocket."
-)
+@Schema(description = "Snapshot of the current order state")
 public class OrderSnapshotResponse {
-
 
     private Long restaurantId;
     private String orderId;
     private Long tableId;
     private Long tableNumber;
     private String sessionToken;
+
     private OrderStatus status;
+
     private BigDecimal subtotal;
     private BigDecimal taxPercentage;
     private BigDecimal taxAmount;
     private BigDecimal totalAmount;
 
-    @Builder.Default
-    private String currency = "INR";
     private boolean payment;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime completedAt;
+
     private List<OrderItemResponse> items;
 }
-

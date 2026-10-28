@@ -20,7 +20,7 @@ public class RemoveItemRequest {
 
     @NotNull(message = "Order ID is required")
     @Positive(message = "Order ID must be greater than zero")
-    private Long id;
+    private String orderId;
 
     @NotNull(message = "Order item ID is required")
     @Positive(message = "Order item ID must be greater than zero")
