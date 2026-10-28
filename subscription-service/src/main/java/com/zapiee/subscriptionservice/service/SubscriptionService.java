@@ -93,6 +93,7 @@ public class SubscriptionService {
                 com.zapiee.subscriptionservice.model.Subscription.builder()
                         .restaurantId(restaurantId)
                         .plans(plan)
+
                         .razorpaySubscriptionId(rzpSubId)
                         .status(SubscriptionStatus.AUTHENTICATED)
                         .shortUrl(shortUrl)

@@ -78,7 +78,6 @@ public class AggregatedImageService {
                 });
     }
 
-    /** Alternates providers (P1, U1, P2, U2...) and drops duplicate URLs, so the UI shows a mix. */
     private static List<ImageResult> interleave(List<List<ImageResult>> lists) {
         Set<String> seen = new HashSet<>();
         List<ImageResult> out = new ArrayList<>();
@@ -93,7 +92,6 @@ public class AggregatedImageService {
         return List.copyOf(out);
     }
 
-    /** Also improves cache hit rate: "  Paneer   Tikka " and "paneer tikka" share one entry. */
     static String normalize(String raw) {
         if (raw == null) return "";
         return raw.replaceAll("\\p{Cntrl}", " ").replaceAll("\\s+", " ").strip().toLowerCase(Locale.ROOT);

@@ -23,7 +23,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(user));
     }
 
-    @PatchMapping("/assing-role")
+    @PutMapping("/assing-role")
     public ResponseEntity<Void> assignRoleOwnerToUser(@RequestHeader(name = "X-USER-ID") Long userId){
         log.info("request received for assign role by user id : {} ", userId);
         userService.assignRole(userId);
