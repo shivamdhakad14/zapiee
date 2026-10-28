@@ -18,7 +18,7 @@ public class CustomerMenuController {
 
     private final PublicMenuItemService publicMenuItemService;
 
-    @GetMapping("/scan")
+    @PostMapping("/scan")
     public ResponseEntity<ApiResponse<PublicMenuResponse>> getMenu(@Valid @RequestBody TableResolveRequest request) {
         log.info("request received for customer menu fetch for restaurant by id : {}" , request);
         PublicMenuResponse publicMenu = publicMenuItemService.getPublicMenu(request);

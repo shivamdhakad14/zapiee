@@ -25,12 +25,12 @@ public class TableResolveRequest {
     @NotNull(message = "Latitude is required")
     @DecimalMin(value = "-90.0")
     @DecimalMax(value = "90.0")
-    private BigDecimal latitude;
+    private Double latitude;
 
     @NotNull(message = "Longitude is required")
     @DecimalMin(value = "-180.0")
     @DecimalMax(value = "180.0")
-    private BigDecimal longitude;
+    private Double longitude;
 
     @NotNull(message = "Accuracy is required")
     @Positive(message = "Accuracy must be greater than zero")

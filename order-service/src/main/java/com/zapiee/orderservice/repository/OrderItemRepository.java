@@ -46,7 +46,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
      *
      * Useful when the same menu item is added again.
      */
-    Optional<OrderItem> findByOrderIdAndItemId(
+    Optional<OrderItem> findByOrderIdAndId(
             Long orderId,
             Long itemId
     );
@@ -54,7 +54,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     /**
      * Check whether a menu item already exists in an order.
      */
-    boolean existsByOrderIdAndItemId(
+    boolean existsByOrderIdAndId(
             Long orderId,
             Long itemId
     );
@@ -77,13 +77,13 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
      */
     @Query("""
             SELECT
-                oi.itemId,
+                oi.id,
                 oi.name,
                 SUM(oi.quantity)
             FROM OrderItem oi
             JOIN oi.order o
             WHERE o.restaurantId = :restaurantId
-            GROUP BY oi.itemId, oi.name
+            GROUP BY oi.id, oi.name
             ORDER BY SUM(oi.quantity) DESC
             """)
     List<Object[]> findTopSellingItems(
@@ -96,13 +96,13 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
      */
     @Query("""
             SELECT
-                oi.itemId,
+                oi.id,
                 oi.name,
                 SUM(oi.quantity)
             FROM OrderItem oi
             JOIN oi.order o
             WHERE o.restaurantId = :restaurantId
-            GROUP BY oi.itemId, oi.name
+            GROUP BY oi.id, oi.name
             ORDER BY SUM(oi.quantity) DESC
             """)
     List<Object[]> findTopSellingItems(

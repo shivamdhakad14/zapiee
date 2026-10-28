@@ -220,7 +220,7 @@ public class TableSessionService {
                 .restaurantId(session.getRestaurantId())
                 .tableId(session.getTableId())
                 .sessionToken(session.getSessionToken())
-                .sessionExpiresAt(session.getExpiresAt())
+                .expireAt(session.getExpiresAt())
                 .build();
     }
 

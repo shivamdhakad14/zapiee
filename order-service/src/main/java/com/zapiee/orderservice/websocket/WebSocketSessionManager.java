@@ -35,60 +35,17 @@ import java.util.concurrent.ConcurrentHashMap;
 )
 public class WebSocketSessionManager {
 
-    /*
-     * ============================================================
-     * CONSTANTS
-     * ============================================================
-     */
 
     private static final String KEY_SEPARATOR = "_";
 
-    /*
-     * ============================================================
-     * ACTIVE CONNECTION REGISTRIES
-     * ============================================================
-     */
 
-    /**
-     * Customer WebSocket connections.
-     *
-     * Key:
-     * restaurantId_tableNumber
-     *
-     * Example:
-     *
-     * 1_12 -> [customerSession1, customerSession2]
-     */
     private final Map<String, Set<WebSocketSession>> tableSessions =
             new ConcurrentHashMap<>();
 
-    /**
-     * Staff/Owner WebSocket connections.
-     *
-     * Key:
-     * restaurantId
-     *
-     * Example:
-     *
-     * 1 -> [staffSession1, ownerSession1]
-     */
     private final Map<Long, Set<WebSocketSession>> staffSessions =
             new ConcurrentHashMap<>();
 
 
-    /*
-     * ============================================================
-     * CUSTOMER SESSION MANAGEMENT
-     * ============================================================
-     */
-
-    /**
-     * Registers a customer WebSocket connection for a table.
-     *
-     * @param restaurantId restaurant identifier
-     * @param tableNumber table number
-     * @param session active WebSocket session
-     */
     @Operation(
             summary = "Register customer WebSocket session",
             description = "Registers an active customer WebSocket connection against a restaurant table."
@@ -133,16 +90,6 @@ public class WebSocketSessionManager {
     }
 
 
-    /**
-     * Removes a customer WebSocket connection from a table.
-     *
-     * <p>If the table has no remaining connections, its registry
-     * entry is also removed.</p>
-     *
-     * @param restaurantId restaurant identifier
-     * @param tableNumber table number
-     * @param session WebSocket session
-     */
     @Operation(
             summary = "Remove customer WebSocket session",
             description = "Removes a customer WebSocket connection from a restaurant table."
@@ -196,17 +143,6 @@ public class WebSocketSessionManager {
     }
 
 
-    /**
-     * Returns all currently registered customer sessions
-     * for a restaurant table.
-     *
-     * <p>A defensive immutable snapshot is returned so callers
-     * cannot directly modify the internal registry.</p>
-     *
-     * @param restaurantId restaurant identifier
-     * @param tableNumber table number
-     * @return active customer WebSocket sessions
-     */
     @Operation(
             summary = "Get table WebSocket sessions",
             description = "Returns the currently registered customer WebSocket sessions for a restaurant table."

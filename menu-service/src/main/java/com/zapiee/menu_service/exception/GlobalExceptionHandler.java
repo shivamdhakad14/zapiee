@@ -5,7 +5,9 @@ import com.zapiee.menu_service.dto.response.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import net.bytebuddy.asm.Advice;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -147,6 +149,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUnavailable(TableServiceUnavailableException ex) {
 
         ApiResponse<Void> body = ApiResponse.<Void>error(ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE")
+                .withTraceId(traceId())
+                .withPath("/api/v1/tables/resolve");
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(body);
+    }
+
+    @ExceptionHandler(ImageSearchUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> unavailable(ImageSearchUnavailableException ex) {
+        log.error("Image search unavailable: {}", ex.getMessage());
+
+        ApiResponse<Void> body = ApiResponse.<Void>error("Image search is temporarily unavailable. Please try again shortly.",
+                        HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE")
                 .withTraceId(traceId())
                 .withPath("/api/v1/tables/resolve");
 

@@ -120,12 +120,9 @@ public class TableController {
     }
 
     @PostMapping("/resolve")
-    public ResponseEntity<ApiResponse<TableResolveResponse>> resolveTable(@Valid @RequestBody TableResolveRequest request) {
+    public ResponseEntity<TableResolveResponse> resolveTable(@Valid @RequestBody TableResolveRequest request) {
         TableResolveResponse response = tableInfoService.resolveTable(request);
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        response, "Table resolved successfully.")
-        );
+        return ResponseEntity.ok(response);
     }
 
     @Operation(

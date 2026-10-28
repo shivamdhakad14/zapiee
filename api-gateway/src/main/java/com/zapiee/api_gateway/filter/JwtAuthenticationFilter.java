@@ -31,7 +31,8 @@ public class JwtAuthenticationFilter implements WebFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
     private static final List<String> PUBLIC_PATHS = List.of(
-            "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/verify-otp"
+            "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/verify-otp", "/api/v1/public-menu/scan",
+            "/api/v1/orders/check-order"
     );
 
     @Override
@@ -39,13 +40,17 @@ public class JwtAuthenticationFilter implements WebFilter {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getPath().value();
 
+        if (isPublicPath(path)) {
+            return chain.filter(exchange);
+        }
+
         if (CorsUtils.isPreFlightRequest(request)) {
             return chain.filter(exchange);
         }
 
-        if (isPublicPath(path)) {
-            return chain.filter(exchange);
-        }
+//        if (isPublicPath(path)) {
+//            return chain.filter(exchange);
+//        }
 
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX)) {

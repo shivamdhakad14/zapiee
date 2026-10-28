@@ -23,6 +23,16 @@ public class RateLimitConfig {
     }
 
     @Bean
+    public KeyResolver tokenResolver() {
+        return exchange -> {
+            String token = exchange.getRequest().getHeaders().getFirst("X-Token");
+            return Mono.just(token != null ? token :
+                    Objects.requireNonNull(exchange.getRequest().getRemoteAddress())
+                            .getAddress().getHostAddress());
+        };
+    }
+
+    @Bean
     public KeyResolver ipKeyResolver() {
         return exchange -> Mono.just(
                 Objects.requireNonNull(exchange.getRequest().getRemoteAddress())

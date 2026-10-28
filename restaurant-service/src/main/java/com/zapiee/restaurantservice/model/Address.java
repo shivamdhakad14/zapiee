@@ -37,8 +37,8 @@ public class Address {
     private String area;
     private String pincode;
 
-    private BigDecimal latitude;
-    private BigDecimal longitude;
+    private Double latitude;
+    private Double longitude;
     private Integer geofenceRadiusMeters;
 
     @CreationTimestamp

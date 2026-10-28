@@ -63,13 +63,7 @@ public class OrderService {
     private final TableSessionClient tableSessionClient;
     private final WebSocketPushService push;
 
-    /**
-     * Default tax percentage.
-     *
-     * This should normally come from application.properties:
-     *
-     * zapiee.order.tax-percentage=5
-     */
+
     @Value("${zapiee.order.tax-percentage:0}")
     private BigDecimal defaultTaxPercentage;
 
@@ -127,35 +121,20 @@ public class OrderService {
     }
 
 
-    // ============================================================
-    // CUSTOMER - ADD NEW ITEMS
-    // ============================================================
-
-    /**
-     * Adds additional items to an existing running order.
-     */
     @Transactional
     @Operation(
             summary = "Add new items",
             description = "Adds items to the existing running order of an active table session."
     )
-    public OrderResponse addNewItems(
-            String sessionToken,
-            AddItemRequest request
-    ) {
+    public OrderResponse addNewItems(String sessionToken, AddItemRequest request) {
 
-        TableSessionResponse session =
-                validateAndGetActiveSession(sessionToken);
+        TableSessionResponse session = validateAndGetActiveSession(sessionToken);
 
         validateAddItemRequest(request);
 
-        Order order =
-                orderRepository.findBySessionId(session.getSessionId())
-                        .orElseThrow(() ->
-                                new IllegalStateException(
-                                        "No running order exists for this table session."
-                                )
-                        );
+        Order order = orderRepository.findBySessionId(session.getSessionId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                        "No running order exists for this table session."));
 
         validateOrderBelongsToSession(order, session);
 
@@ -165,19 +144,11 @@ public class OrderService {
 
         addItemsToOrder(order, request);
 
-        /*
-         * If an order was already SERVED and customer adds new items,
-         * the new items require preparation.
-         */
+
         if (previousStatus == OrderStatus.SERVED) {
             order.setStatus(OrderStatus.PREPARING);
         }
 
-        /*
-         * If order is PENDING, keep it PENDING.
-         *
-         * If order is PREPARING, keep it PREPARING.
-         */
         recalculateTotals(order);
 
         Order savedOrder = orderRepository.save(order);
@@ -199,38 +170,20 @@ public class OrderService {
     }
 
 
-    // ============================================================
-    // CUSTOMER - REMOVE ITEM
-    // ============================================================
-
-    /**
-     * Removes an item from an order.
-     *
-     * Customer can remove items only while the order is PENDING.
-     */
     @Transactional
     @Operation(
             summary = "Remove order item",
             description = "Removes an item from a pending order belonging to the active table session."
     )
-    public OrderResponse removeItem(
-            String sessionToken,
-            RemoveItemRequest request
-    ) {
+    public OrderResponse removeItem(String sessionToken, RemoveItemRequest request) {
 
-        TableSessionResponse session =
-                validateAndGetActiveSession(sessionToken);
+        TableSessionResponse session = validateAndGetActiveSession(sessionToken);
 
         validateRemoveItemRequest(request);
 
-        Order order =
-                orderRepository.findById(request.getId())
-                        .orElseThrow(() ->
-                                new IllegalStateException(
-                                        "Order not found with id: "
-                                                + request.getId()
-                                )
-                        );
+        Order order = orderRepository.findById(request.getId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                        "Order not found with id: " + request.getId()));
 
         validateOrderBelongsToSession(order, session);
 
@@ -240,43 +193,24 @@ public class OrderService {
             );
         }
 
-        OrderItem item =
-                orderItemRepository.findById(request.getItemId())
-                        .orElseThrow(() ->
-                                new IllegalStateException(
-                                        "Order item not found with id: "
-                                                + request.getItemId()
-                                )
-                        );
+        OrderItem item = orderItemRepository.findById(request.getItemId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                        "Order item not found with id: " + request.getItemId()));
 
-        if (item.getOrder() == null ||
-                !Objects.equals(
-                        item.getOrder().getId(),
-                        order.getId()
-                )) {
-
-            throw new IllegalStateException(
-                    "Order item does not belong to the requested order."
-            );
+        if (item.getOrder() == null || !Objects.equals(item.getOrder().getId(), order.getId())) {
+            throw new IllegalStateException("Order item does not belong to the requested order.");
         }
 
         order.getItems().remove(item);
 
         orderItemRepository.delete(item);
 
-        /*
-         * If no items remain, do not keep an empty running order.
-         */
         if (order.getItems().isEmpty()) {
 
             order.setSubtotal(BigDecimal.ZERO);
             order.setTaxAmount(BigDecimal.ZERO);
             order.setTotalAmount(BigDecimal.ZERO);
 
-            /*
-             * We don't close the Table Service session here.
-             * Table Service owns the session lifecycle.
-             */
             order.setStatus(OrderStatus.COMPLETED);
             order.setCompletedAt(LocalDateTime.now());
 
@@ -286,80 +220,37 @@ public class OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(
-                savedOrder,
-                "ITEM_REMOVED"
-        );
+        broadcastOrderUpdate(savedOrder, "ITEM_REMOVED");
 
         return mapper.toOrderResponse(savedOrder);
     }
 
 
-    // ============================================================
-    // STAFF / OWNER - UPDATE STATUS
-    // ============================================================
-
-    /**
-     * Updates order status.
-     *
-     * This method is intended for STAFF / OWNER WebSocket operations.
-     *
-     * Restaurant authorization must be performed before calling this
-     * method or by using the restaurantId overload.
-     */
     @Transactional
     @Operation(
             summary = "Update order status",
             description = "Updates the status of an order and broadcasts the updated order."
     )
-    public OrderResponse updateStatusByOrderId(
-            Long restaurantId,
-            Long orderId,
-            OrderStatus newStatus
-    ) {
+    public OrderResponse updateStatusByOrderId(Long restaurantId, Long orderId, OrderStatus newStatus) {
 
-        validatePositiveId(
-                restaurantId,
-                "Restaurant ID"
-        );
+        validatePositiveId(restaurantId, "Restaurant ID");
 
-        validatePositiveId(
-                orderId,
-                "Order ID"
-        );
+        validatePositiveId(orderId, "Order ID");
 
         if (newStatus == null) {
-            throw new IllegalArgumentException(
-                    "Order status cannot be null."
-            );
+            throw new IllegalArgumentException("Order status cannot be null.");
         }
 
-        Order order =
-                orderRepository.findById(orderId)
-                        .orElseThrow(() ->
-                                new IllegalStateException(
-                                        "Order not found with id: " + orderId
-                                )
-                        );
+        Order order = orderRepository.findById(orderId)
+                        .orElseThrow(() -> new IllegalStateException(
+                                        "Order not found with id: " + orderId));
 
-        /*
-         * Never allow STAFF/OWNER to update another restaurant's order.
-         */
-        if (!Objects.equals(
-                order.getRestaurantId(),
-                restaurantId
-        )) {
-
+        if (!Objects.equals(order.getRestaurantId(), restaurantId)) {
             throw new IllegalStateException(
-                    "Order does not belong to the requested restaurant."
-            );
+                    "Order does not belong to the requested restaurant.");
         }
 
-        validateStatusTransition(
-                order.getStatus(),
-                newStatus,
-                order.isPayment()
-        );
+        validateStatusTransition(order.getStatus(), newStatus, order.isPayment());
 
         OrderStatus previousStatus = order.getStatus();
 
@@ -369,61 +260,32 @@ public class OrderService {
             order.setCompletedAt(LocalDateTime.now());
         }
 
-        Order savedOrder =
-                orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(
-                savedOrder,
-                "UPDATE_STATUS"
-        );
+        broadcastOrderUpdate(savedOrder, "UPDATE_STATUS");
 
-        log.info(
-                "Order status updated | restaurantId={} | orderId={} | {} -> {}",
-                restaurantId,
-                orderId,
-                previousStatus,
-                newStatus
-        );
+        log.info("Order status updated | restaurantId={} | orderId={} | {} -> {}",
+                restaurantId, orderId, previousStatus, newStatus);
 
         return mapper.toOrderResponse(savedOrder);
     }
 
 
-    /**
-     * Compatibility overload for existing code.
-     *
-     * This should eventually be replaced by the restaurant-aware method.
-     */
     @Transactional
-    public OrderResponse updateStatusByOrderId(
-            Long orderId,
-            OrderStatus newStatus
-    ) {
+    public OrderResponse updateStatusByOrderId(Long orderId, OrderStatus newStatus) {
 
-        validatePositiveId(
-                orderId,
-                "Order ID"
-        );
+        validatePositiveId(orderId, "Order ID");
 
         if (newStatus == null) {
-            throw new IllegalArgumentException(
-                    "Order status cannot be null."
-            );
+            throw new IllegalArgumentException("Order status cannot be null.");
         }
 
-        Order order =
-                orderRepository.findById(orderId)
-                        .orElseThrow(() ->
-                                new IllegalStateException(
-                                        "Order not found with id: " + orderId
-                                )
-                        );
+        Order order = orderRepository.findById(orderId)
+                        .orElseThrow(() -> new IllegalStateException(
+                                        "Order not found with id: " + orderId));
 
-        validateStatusTransition(
-                order.getStatus(),
-                newStatus,
-                order.isPayment()
-        );
+        validateStatusTransition(order.getStatus(),
+                newStatus, order.isPayment());
 
         order.setStatus(newStatus);
 
@@ -431,13 +293,9 @@ public class OrderService {
             order.setCompletedAt(LocalDateTime.now());
         }
 
-        Order savedOrder =
-                orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(
-                savedOrder,
-                "UPDATE_STATUS"
-        );
+        broadcastOrderUpdate(savedOrder, "UPDATE_STATUS");
 
         return mapper.toOrderResponse(savedOrder);
     }
@@ -447,120 +305,66 @@ public class OrderService {
     @Operation(summary = "Add items by restaurant",
             description = "Allows Staff/Owner to add items to an existing restaurant order."
     )
-    public OrderResponse addItemsByRestaurant(
-            Long restaurantId,
-            AddItemRequest request,
-            MessageType messageType
-    ) {
+    public OrderResponse addItemsByRestaurant(Long restaurantId, AddItemRequest request, MessageType messageType) {
 
-        validatePositiveId(
-                restaurantId,
-                "Restaurant ID"
-        );
+        validatePositiveId(restaurantId, "Restaurant ID");
 
         validateAddItemRequest(request);
 
         if (messageType == null) {
-            throw new IllegalArgumentException(
-                    "Message type is required."
-            );
+            throw new IllegalArgumentException("Message type is required.");
         }
 
         if (messageType != MessageType.ADD_ITEM &&
                 messageType != MessageType.NEW_ITEM) {
 
             throw new IllegalArgumentException(
-                    "Invalid message type for adding items: "
-                            + messageType
-            );
+                    "Invalid message type for adding items: " + messageType);
         }
 
         Long orderId = request.getId();
 
         validatePositiveId(orderId, "Order ID");
 
-        Order order =
-                orderRepository.findById(orderId)
-                        .orElseThrow(() ->
-                                new IllegalStateException(
-                                        "Order not found with id: " + orderId
-                                )
-                        );
+        Order order = orderRepository.findById(orderId)
+                        .orElseThrow(() -> new IllegalStateException(
+                                        "Order not found with id: " + orderId));
 
-        /*
-         * IMPORTANT:
-         * Never allow Staff/Owner to modify another restaurant's order.
-         */
-        if (!Objects.equals(
-                order.getRestaurantId(),
-                restaurantId
-        )) {
-
+        if (!Objects.equals(order.getRestaurantId(), restaurantId)) {
             throw new IllegalStateException(
-                    "Order does not belong to the requested restaurant."
-            );
+                    "Order does not belong to the requested restaurant.");
         }
 
         validateOrderModifiable(order);
 
-        OrderStatus previousStatus =
-                order.getStatus();
+        OrderStatus previousStatus = order.getStatus();
 
-        addItemsToOrder(
-                order,
-                request
-        );
+        addItemsToOrder(order, request);
 
-        /*
-         * If the order was already SERVED and Staff/Owner
-         * adds another item, it needs preparation again.
-         */
         if (previousStatus == OrderStatus.SERVED) {
             order.setStatus(OrderStatus.PREPARING);
         }
 
         recalculateTotals(order);
 
-        Order savedOrder =
-                orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
 
-        broadcastOrderUpdate(
-                savedOrder,
-                messageType.name()
-        );
+        broadcastOrderUpdate(savedOrder, messageType.name());
 
-        log.info(
-                "Staff/Owner added items | restaurantId={} | orderId={} | previousStatus={} | newStatus={}",
-                restaurantId,
-                savedOrder.getOrderId(),
-                previousStatus,
-                savedOrder.getStatus()
-        );
+        log.info("Staff/Owner added items | restaurantId={} | orderId={} | previousStatus={} | newStatus={}",
+                restaurantId, savedOrder.getOrderId(), previousStatus, savedOrder.getStatus());
 
         return mapper.toOrderResponse(savedOrder);
     }
 
-
-    /**
-     * Staff/Owner:
-     * Removes an item from an order within the restaurant.
-     *
-     * Restaurant scope is mandatory.
-     */
     @Transactional
     @Operation(
             summary = "Remove item by restaurant",
             description = "Allows Staff/Owner to remove an item from an order belonging to their restaurant."
     )
-    public OrderResponse removeItemByRestaurant(
-            Long restaurantId,
-            RemoveItemRequest request
-    ) {
+    public OrderResponse removeItemByRestaurant(Long restaurantId, RemoveItemRequest request) {
 
-        validatePositiveId(
-                restaurantId,
-                "Restaurant ID"
-        );
+        validatePositiveId(restaurantId, "Restaurant ID");
 
         validateRemoveItemRequest(request);
 
@@ -760,13 +564,6 @@ public class OrderService {
     }
 
 
-    // ============================================================
-    // CUSTOMER - RUNNING ORDER
-    // ============================================================
-
-    /**
-     * Finds the running order for a restaurant/table.
-     */
     @Transactional
     @Operation(
             summary = "Check running order",

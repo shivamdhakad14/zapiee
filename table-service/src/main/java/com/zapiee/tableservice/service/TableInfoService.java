@@ -35,8 +35,6 @@ public class TableInfoService {
     @Transactional
     public TableResolveResponse resolveTable(TableResolveRequest request) {
 
-        validateResolveRequest(request);
-
         TableQr qr = tableQrRepository.findByQrTokenAndStatus(request.getQrToken(), QrStatus.ACTIVE)
                 .orElseThrow(() -> new QrNotFoundException("Active QR code not found."));
 
@@ -62,15 +60,13 @@ public class TableInfoService {
             throw new BadRequestException("Restaurant information could not be retrieved.");
         }
 
-        validateRestaurantLocation(restaurant);
-
-        BigDecimal distanceMeters = geoLocationUtil.calculateDistanceMeters(
+        Double distanceMeters = geoLocationUtil.calculateDistanceMeters(
                         request.getLatitude(), request.getLongitude(),
                         restaurant.getLatitude(), restaurant.getLongitude());
 
-        BigDecimal allowedRadius = locationProperties.getAllowedRadiusMeters();
+        Double allowedRadius = locationProperties.getAllowedRadiusMeters();
 
-        if (allowedRadius == null || allowedRadius.compareTo(BigDecimal.ZERO) <= 0) {
+        if (allowedRadius == null || allowedRadius.compareTo(distanceMeters) <= 0) {
             throw new BadRequestException("Location validation radius is not configured correctly.");
         }
 
@@ -91,78 +87,14 @@ public class TableInfoService {
         }
 
         log.info("Table resolved successfully. " + "restaurantId={}, tableId={}, distanceMeters={}, sessionExpiresAt={}",
-                restaurantId, table.getId(), distanceMeters, sessionResponse.getSessionExpiresAt());
+                restaurantId, table.getId(), distanceMeters, sessionResponse.getExpireAt());
 
         return TableResolveResponse.builder()
                 .restaurantId(restaurantId)
                 .tableId(table.getId())
                 .sessionToken(sessionResponse.getSessionToken())
-                .sessionExpiresAt(sessionResponse.getSessionExpiresAt())
+                .expireAt(sessionResponse.getExpireAt())
                 .build();
-    }
-
-
-
-    private void validateResolveRequest(TableResolveRequest request) {
-
-        if (request == null) {
-            throw new BadRequestException("Table resolve request is required.");
-        }
-
-        if (request.getQrToken() == null || request.getQrToken().isBlank()) {
-            throw new BadRequestException("QR token is required.");
-        }
-
-        if (request.getLatitude() == null) {
-            throw new BadRequestException("Latitude is required.");
-        }
-
-        if (request.getLongitude() == null) {
-            throw new BadRequestException("Longitude is required.");
-        }
-
-        if (request.getAccuracyMeters() == null) {
-            throw new BadRequestException("Accuracy is required.");
-        }
-
-        if (request.getAccuracyMeters() <= 0) {
-            throw new BadRequestException("Accuracy must be greater than zero.");
-        }
-
-        if (request.getLatitude().compareTo(BigDecimal.valueOf(-90)) < 0
-                || request.getLatitude().compareTo(BigDecimal.valueOf(90)) > 0) {
-            throw new BadRequestException("Latitude must be between -90 and 90.");
-        }
-
-        if (request.getLongitude().compareTo(BigDecimal.valueOf(-180)) < 0
-                || request.getLongitude().compareTo(BigDecimal.valueOf(180)) > 0) {
-            throw new BadRequestException("Longitude must be between -180 and 180.");
-        }
-
-        Double maxAccuracy = locationProperties.getMaxGpsAccuracyMeters();
-
-        if (maxAccuracy != null && request.getAccuracyMeters() > maxAccuracy) {
-            throw new BadRequestException("GPS accuracy is too low. " +
-                            "Please enable precise location and try again.");
-        }
-    }
-
-
-    private void validateRestaurantLocation(RestaurantInfoResponse location) {
-
-        if (location.getLatitude() == null || location.getLongitude() == null) {
-            throw new BadRequestException("Restaurant location is not configured.");
-        }
-
-        if (location.getLatitude().compareTo(BigDecimal.valueOf(-90)) < 0 ||
-                location.getLatitude().compareTo(BigDecimal.valueOf(90)) > 0) {
-            throw new BadRequestException("Restaurant latitude is invalid.");
-        }
-
-        if (location.getLongitude().compareTo(BigDecimal.valueOf(-180)) < 0 ||
-                location.getLongitude().compareTo(BigDecimal.valueOf(180)) > 0) {
-            throw new BadRequestException("Restaurant longitude is invalid.");
-        }
     }
 
 }
