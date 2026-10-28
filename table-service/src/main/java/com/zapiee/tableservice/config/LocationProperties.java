@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @ConfigurationProperties(prefix = "zapiee.location")
 public class LocationProperties {
 
-    private BigDecimal allowedRadiusMeters = BigDecimal.valueOf(50.0);
+    private BigDecimal allowedRadiusMeters = BigDecimal.valueOf(200.0);
     private Double maxGpsAccuracyMeters = 100.0;
 
 }

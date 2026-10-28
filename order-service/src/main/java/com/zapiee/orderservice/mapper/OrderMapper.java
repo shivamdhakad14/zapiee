@@ -23,25 +23,17 @@ import java.util.Objects;
 )
 public class OrderMapper {
 
-    /**
-     * Converts AddItemRequest into OrderItem entities.
-     */
-    public List<OrderItem> toEntity(
-            AddItemRequest request,
-            Order order
-    ) {
 
-        if (request == null ||
-                request.getItems() == null ||
+    public List<OrderItem> toEntity(AddItemRequest request, Order order) {
+
+        if (request == null || request.getItems() == null ||
                 request.getItems().isEmpty()) {
-
             return Collections.emptyList();
         }
 
         if (order == null) {
             throw new IllegalArgumentException(
-                    "Order cannot be null."
-            );
+                    "Order cannot be null.");
         }
 
         return request.getItems()
@@ -51,46 +43,28 @@ public class OrderMapper {
                 .toList();
     }
 
-    /**
-     * Converts one request item into an OrderItem entity.
-     */
-    private OrderItem toEntity(
-            OrderItemDTO dto,
-            Order order
-    ) {
-
+    private OrderItem toEntity(OrderItemDTO dto, Order order) {
         if (dto == null) {
             throw new IllegalArgumentException(
-                    "Order item cannot be null."
-            );
+                    "Order item cannot be null.");
         }
 
         return OrderItem.builder()
                 .order(order)
-                .id(dto.getItemId())
                 .name(dto.getName())
                 .price(dto.getPrice())
                 .quantity(dto.getQuantity())
                 .imageUrl(dto.getImageUrl())
                 .currency(
-                        dto.getCurrency() != null &&
-                                !dto.getCurrency().isBlank()
+                        dto.getCurrency() != null
+                                && !dto.getCurrency().isBlank()
                                 ? dto.getCurrency()
                                 : "INR"
                 )
                 .build();
     }
 
-    /**
-     * Converts OrderItem entity into request-compatible DTO.
-     */
-    public OrderItemDTO toDto(
-            OrderItem item
-    ) {
-
-        if (item == null) {
-            return null;
-        }
+    public OrderItemDTO toDto(OrderItem item) {
 
         return OrderItemDTO.builder()
                 .itemId(item.getId())
@@ -102,9 +76,7 @@ public class OrderMapper {
                 .build();
     }
 
-    /**
-     * Converts OrderItem entity into detailed response DTO.
-     */
+
     private OrderItemResponse toItemResponse( OrderItem item ) {
         if (item == null) {
             return null;
@@ -122,17 +94,11 @@ public class OrderMapper {
                 .quantity(item.getQuantity())
                 .imageUrl(item.getImageUrl())
                 .currency(resolveItemCurrency(item))
-                .lineTotal(lineTotal) .build(); }
-    /**
-     * Detailed customer/order response.
-     */
-    public OrderResponse toOrderResponse(
-            Order order
-    ) {
+                .lineTotal(lineTotal)
+                .build();
+    }
 
-        if (order == null) {
-            return null;
-        }
+    public OrderResponse toOrderResponse(Order order) {
 
         return OrderResponse.builder()
                 .orderId(order.getOrderId())
@@ -154,16 +120,7 @@ public class OrderMapper {
                 .build();
     }
 
-    /**
-     * Staff/Owner dashboard response.
-     *
-     * Session token is deliberately not included.
-     */
     public OrderListResponse toListResponse(Order order) {
-
-        if (order == null) {
-            return null;
-        }
 
         return OrderListResponse.builder()
                 .id(order.getId())
@@ -184,14 +141,7 @@ public class OrderMapper {
                 .build();
     }
 
-    /**
-     * Converts Order into customer WebSocket snapshot.
-     */
     public OrderSnapshotResponse toSnapshot(Order order) {
-
-        if (order == null) {
-            return null;
-        }
 
         return OrderSnapshotResponse.builder()
                 .restaurantId(order.getRestaurantId())
@@ -212,13 +162,9 @@ public class OrderMapper {
                 .build();
     }
 
-    private List<OrderItemResponse> toItemResponseList(
-            List<OrderItem> items
-    ) {
+    private List<OrderItemResponse> toItemResponseList(List<OrderItem> items) {
 
-        if (items == null ||
-                items.isEmpty()) {
-
+        if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
 
@@ -230,9 +176,7 @@ public class OrderMapper {
 
     private List<OrderItemDTO> toItemDtoList(List<OrderItem> items) {
 
-        if (items == null ||
-                items.isEmpty()) {
-
+        if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
 
@@ -242,13 +186,9 @@ public class OrderMapper {
                 .toList();
     }
 
-    private String resolveCurrency(
-            List<OrderItem> items
-    ) {
+    private String resolveCurrency(List<OrderItem> items) {
 
-        if (items == null ||
-                items.isEmpty()) {
-
+        if (items == null || items.isEmpty()) {
             return "INR";
         }
 
@@ -263,31 +203,22 @@ public class OrderMapper {
                 .orElse("INR");
     }
 
-    private String resolveItemCurrency(
-            OrderItem item
-    ) {
+    private String resolveItemCurrency(OrderItem item) {
 
-        if (item.getCurrency() == null ||
-                item.getCurrency().isBlank()) {
-
+        if (item.getCurrency() == null || item.getCurrency().isBlank()) {
             return "INR";
         }
 
         return item.getCurrency();
     }
 
-    private java.math.BigDecimal calculateLineTotal(
-            OrderItem item
-    ) {
+    private java.math.BigDecimal calculateLineTotal(OrderItem item) {
 
-        if (item.getPrice() == null ||
-                item.getQuantity() == null) {
-
+        if (item.getPrice() == null || item.getQuantity() == null) {
             return java.math.BigDecimal.ZERO;
         }
 
-        return item.getPrice()
-                .multiply(
+        return item.getPrice().multiply(
                         java.math.BigDecimal.valueOf(
                                 item.getQuantity()
                         )

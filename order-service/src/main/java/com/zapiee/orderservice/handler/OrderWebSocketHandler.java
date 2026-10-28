@@ -437,9 +437,6 @@ public class OrderWebSocketHandler extends TextWebSocketHandler {
             throw new SessionNotFoundException("Table session is not active.");
         }
 
-//        if (response.getExpiresAt() != null && !response.getExpiresAt().isAfter(LocalDateTime.now())) {
-//            throw new SessionExpiredException("Table session has expired.");
-//        }
     }
 
 

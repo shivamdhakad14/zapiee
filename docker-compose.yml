@@ -67,7 +67,7 @@ services:
       --collation-server=utf8mb4_unicode_ci
       --sql-mode=STRICT_TRANS_TABLES
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: 12345678
     volumes:
       - mysql_data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d

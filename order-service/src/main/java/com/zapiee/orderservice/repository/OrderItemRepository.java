@@ -17,96 +17,13 @@ import java.util.Optional;
 )
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
-    /**
-     * Find all items belonging to a particular order.
-     */
+
     List<OrderItem> findByOrderIdOrderByIdAsc(Long orderId);
 
-    /**
-     * Find a particular item belonging to a particular order.
-     *
-     * This is important for security/business validation because
-     * an order item must not be removed from another order.
-     */
-    Optional<OrderItem> findByIdAndOrderId(
-            Long orderItemId,
-            Long orderId
-    );
+    Optional<OrderItem> findByIdAndOrderId(Long orderItemId, Long orderId);
 
-    /**
-     * Check whether an item belongs to an order.
-     */
-    boolean existsByIdAndOrderId(
-            Long orderItemId,
-            Long orderId
-    );
+    boolean existsByIdAndOrderId(Long orderItemId, Long orderId);
 
-    /**
-     * Find an existing menu item inside an order.
-     *
-     * Useful when the same menu item is added again.
-     */
-    Optional<OrderItem> findByOrderIdAndItemId(
-            Long orderId,
-            Long itemId
-    );
+    void deleteByIdAndOrderId(Long orderItemId, Long orderId);
 
-    /**
-     * Check whether a menu item already exists in an order.
-     */
-    boolean existsByOrderIdAndItemId(
-            Long orderId,
-            Long itemId
-    );
-
-    /**
-     * Delete a specific item from a specific order.
-     */
-    void deleteByIdAndOrderId(
-            Long orderItemId,
-            Long orderId
-    );
-
-    /**
-     * Top-selling menu items for a restaurant.
-     *
-     * Returns:
-     * [0] itemId
-     * [1] itemName
-     * [2] totalQuantitySold
-     */
-    @Query("""
-            SELECT
-                oi.itemId,
-                oi.name,
-                SUM(oi.quantity)
-            FROM OrderItem oi
-            JOIN oi.order o
-            WHERE o.restaurantId = :restaurantId
-            GROUP BY oi.itemId, oi.name
-            ORDER BY SUM(oi.quantity) DESC
-            """)
-    List<Object[]> findTopSellingItems(
-            @Param("restaurantId") Long restaurantId
-    );
-
-    /**
-     * Top-selling items with a configurable maximum result count
-     * should preferably be handled using Pageable.
-     */
-    @Query("""
-            SELECT
-                oi.itemId,
-                oi.name,
-                SUM(oi.quantity)
-            FROM OrderItem oi
-            JOIN oi.order o
-            WHERE o.restaurantId = :restaurantId
-            GROUP BY oi.itemId, oi.name
-            ORDER BY SUM(oi.quantity) DESC
-            """)
-    List<Object[]> findTopSellingItems(
-            @Param("restaurantId") Long restaurantId,
-            org.springframework.data.domain.Pageable pageable
-    );
 }

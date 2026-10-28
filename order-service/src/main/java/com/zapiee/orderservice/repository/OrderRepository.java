@@ -22,35 +22,14 @@ import java.util.Optional;
 )
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
-    /**
-     * Find an order using restaurant ID and its public order UUID.
-     *
-     * Restaurant ID is included to prevent cross-restaurant access.
-     */
-    Order findByRestaurantIdAndOrderId(
-            Long restaurantId,
-            String orderId
-    );
 
-    /**
-     * Find the currently associated order for a table session.
-     *
-     * The sessionToken is generated and owned by Table Service.
-     * Order Service only stores/uses the token for association.
-     */
-    Optional<Order> findByRestaurantIdAndSessionToken(
-            Long restaurantId,
-            String sessionToken
-    );
+    Order findByRestaurantIdAndOrderId(Long restaurantId, String orderId);
+
+    Optional<Order> findByRestaurantIdAndSessionToken(Long restaurantId, String sessionToken);
 
     Optional<Order> findBySessionId(Long sessionId);
 
-    /**
-     * Find an order for a restaurant and session token,
-     * fetching items in the same query.
-     *
-     * This is useful when returning the customer's current order.
-     */
+
     @Query("""
             SELECT DISTINCT o
             FROM Order o
@@ -63,116 +42,47 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("sessionToken") String sessionToken
     );
 
-    /**
-     * Find running orders for a restaurant.
-     *
-     * Running statuses are supplied by the service layer:
-     * PENDING, PREPARING, SERVED.
-     */
     Page<Order> findByRestaurantIdAndStatusInOrderByCreatedAtDesc(
             Long restaurantId,
             Collection<OrderStatus> statuses,
             Pageable pageable
     );
 
-    /**
-     * Find orders of a specific status for a restaurant.
-     */
+
     Page<Order> findByRestaurantIdAndStatusOrderByCreatedAtDesc(
             Long restaurantId,
             OrderStatus status,
             Pageable pageable
     );
 
-    /**
-     * Find all orders with selected statuses for a restaurant.
-     *
-     * Useful for WebSocket staff/owner snapshots.
-     */
+
     List<Order> findByRestaurantIdAndStatusInOrderByCreatedAtDesc(
             Long restaurantId,
             Collection<OrderStatus> statuses
     );
 
-    /**
-     * Find a running order for a particular restaurant table.
-     *
-     * The service layer must supply only running statuses.
-     */
+
     Optional<Order> findByRestaurantIdAndTableNumberAndStatusIn(
             Long restaurantId,
             Long tableNumber,
             Collection<OrderStatus> statuses
     );
 
-    /**
-     * Check whether an order exists for a restaurant.
-     *
-     * Useful before performing an operation on an order.
-     */
+
     boolean existsByRestaurantIdAndOrderId(
             Long restaurantId,
             String orderId
     );
 
-    /**
-     * Count orders created from a specific time.
-     *
-     * Used for restaurant-level order statistics.
-     */
-    @Query("""
-            SELECT COUNT(o)
-            FROM Order o
-            WHERE o.restaurantId = :restaurantId
-              AND o.createdAt >= :startDateTime
-            """)
-    long countOrdersSince(
-            @Param("restaurantId") Long restaurantId,
-            @Param("startDateTime") LocalDateTime startDateTime
-    );
 
-    /**
-     * Count orders for a restaurant within a date/time range.
-     */
-    @Query("""
-            SELECT COUNT(o)
-            FROM Order o
-            WHERE o.restaurantId = :restaurantId
-              AND o.createdAt >= :startDateTime
-              AND o.createdAt < :endDateTime
-            """)
-    long countOrdersBetween(
-            @Param("restaurantId") Long restaurantId,
-            @Param("startDateTime") LocalDateTime startDateTime,
-            @Param("endDateTime") LocalDateTime endDateTime
-    );
+    long countByRestaurantIdAndStatus(Long restaurantId, OrderStatus status);
 
-    /**
-     * Count orders by status for a restaurant.
-     */
-    long countByRestaurantIdAndStatus(
-            Long restaurantId,
-            OrderStatus status
-    );
+    long countByRestaurantIdAndStatusIn(Long restaurantId,
+                                        Collection<OrderStatus> statuses);
 
-    /**
-     * Count orders for a restaurant using multiple statuses.
-     */
-    long countByRestaurantIdAndStatusIn(
-            Long restaurantId,
-            Collection<OrderStatus> statuses
-    );
-
-    /**
-     * Find orders created within a date/time range.
-     *
-     * Useful for order history and analytics.
-     */
     Page<Order> findByRestaurantIdAndCreatedAtBetweenOrderByCreatedAtDesc(
-            Long restaurantId,
-            LocalDateTime startDateTime,
-            LocalDateTime endDateTime,
-            Pageable pageable
+            Long restaurantId, LocalDateTime startDateTime,
+            LocalDateTime endDateTime, Pageable pageable
     );
 }
 
