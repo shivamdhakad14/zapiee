@@ -65,9 +65,6 @@ public class OrderWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final TableSessionClient tableSessionClient;
 
-    // ================================================================
-    // CONNECTION LIFECYCLE
-    // ================================================================
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {

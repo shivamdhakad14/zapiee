@@ -17,7 +17,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 public class WebSocketConfig implements WebSocketConfigurer {
 
     private final OrderWebSocketHandler handler;
-    private final WebSocketAuthInterceptor interceptor;
+    private final WebSocketInterceptor interceptor;
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {

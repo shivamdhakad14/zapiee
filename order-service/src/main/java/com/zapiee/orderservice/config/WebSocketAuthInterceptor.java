@@ -42,6 +42,8 @@ public class WebSocketAuthInterceptor implements HandshakeInterceptor {
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
 
+        log.info("WebSocket handshake request received: {}", request.getURI());
+
         if (!(request instanceof ServletServerHttpRequest servletRequest)) {
             log.warn("WebSocket handshake rejected: unsupported request type.");
             return false;
