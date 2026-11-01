@@ -1,0 +1,24 @@
+package com.Zapiee.notification_service.enums;
+
+public enum NotificationType {
+
+    ORDER_CREATED,
+    ORDER_UPDATED,
+    ORDER_STATUS_UPDATED,
+    ORDER_COMPLETED,
+    ADD_ITEM,
+
+    REGISTER_SUCCESS,
+
+    RESTAURANT_CREATED,
+    RESTAURANT_DELETED,
+
+    STAFF_CREATED,
+    STAFF_DELETED,
+    PASSWORD_CHANGED,
+
+    SUBSCRIPTION_CREATED,
+    SUBSCRIPTION_DELETED,
+    SUBSCRIPTION_ENDED
+
+}

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${title}">OrderZap Notification</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f6f8; font-family:Arial,Helvetica,sans-serif; color:#222;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background:#f4f6f8; padding:20px 0;">
+    <tr>
+        <td align="center">
+
+            <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+                   style="width:100%; max-width:600px; background:#ffffff; border:1px solid #e5e7eb;">
+
+                <tr>
+                    <td align="center" style="background:#202938; color:#ffffff; padding:22px;">
+                        <div style="font-size:26px; font-weight:bold;">OrderZap</div>
+                        <div style="font-size:14px; margin-top:6px;">Notification Center</div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:25px;">
+                        <h2 style="margin:0 0 12px; color:#202938; font-size:20px;"
+                            th:text="${title}">Notification Title</h2>
+
+                        <p style="margin:0 0 20px; font-size:15px; line-height:1.7;"
+                           th:text="${message}">Notification message goes here.</p>
+
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                               style="background:#f8fafc; border:1px solid #e5e7eb; font-size:14px;">
+                            <tr th:if="${eventTypeLabel != null}">
+                                <td style="padding:8px 12px; color:#6b7280; width:40%;">Notification type</td>
+                                <td style="padding:8px 12px;" th:text="${eventTypeLabel}">Order Created</td>
+                            </tr>
+                            <tr th:if="${orderId != null}">
+                                <td style="padding:8px 12px; color:#6b7280;">Order ID</td>
+                                <td style="padding:8px 12px;" th:text="${orderId}"></td>
+                            </tr>
+                            <tr th:if="${tableId != null}">
+                                <td style="padding:8px 12px; color:#6b7280;">Table ID</td>
+                                <td style="padding:8px 12px;" th:text="${tableId}"></td>
+                            </tr>
+                            <tr th:if="${restaurantId != null}">
+                                <td style="padding:8px 12px; color:#6b7280;">Restaurant ID</td>
+                                <td style="padding:8px 12px;" th:text="${restaurantId}"></td>
+                            </tr>
+                            <tr th:each="entry : ${details}">
+                                <td style="padding:8px 12px; color:#6b7280;" th:text="${entry.key}"></td>
+                                <td style="padding:8px 12px;" th:text="${entry.value}"></td>
+                            </tr>
+                        </table>
+
+                        <p style="margin:25px 0 0; font-size:12px; color:#6b7280;">
+                            This is an automated notification from OrderZap.
+                            Please do not reply to this email.
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td align="center" style="background:#f8fafc; padding:15px; font-size:12px; color:#6b7280;">
+                        &copy; <span th:text="${year}">2026</span> OrderZap
+                    </td>
+                </tr>
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
