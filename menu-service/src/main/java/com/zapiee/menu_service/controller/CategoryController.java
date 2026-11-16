@@ -1,6 +1,7 @@
 package com.zapiee.menu_service.controller;
 
 import com.zapiee.menu_service.dto.request.CreateCategoryRequest;
+import com.zapiee.menu_service.dto.request.UpdateCategoryRequest;
 import com.zapiee.menu_service.dto.response.ApiResponse;
 import com.zapiee.menu_service.dto.response.CategoryResponse;
 import com.zapiee.menu_service.service.CategoryService;
@@ -41,6 +42,22 @@ public class CategoryController {
         log.info("request arrived for category by restaurant and catId: {}", restaurantId);
         CategoryResponse category = categoryService.getCategoryByCategory(categoryId, restaurantId);
         return ResponseEntity.ok(ApiResponse.success(category));
+    }
+
+    @PutMapping
+    public ResponseEntity<ApiResponse<CategoryResponse>> updateCategory(@RequestHeader(name = "X-RESTAURANT-ID") Long restaurantId,
+                                                                        @Valid @RequestBody UpdateCategoryRequest request){
+        log.info("category update request received by restaurant : {}", restaurantId);
+        CategoryResponse category = categoryService.updateCategory(request, restaurantId);
+        return ResponseEntity.ok(ApiResponse.created(category, "category update successfully"));
+    }
+
+    @DeleteMapping("/{categoryId}")
+    public ResponseEntity<ApiResponse<Void>> updateCategory(@RequestHeader(name = "X-RESTAURANT-ID") Long restaurantId,
+                                                            @PathVariable Long categoryId){
+        log.info("category delete request received by restaurant : {}", restaurantId);
+        categoryService.deleteCategory(categoryId, restaurantId);
+        return ResponseEntity.ok(ApiResponse.created(null, "category delete successfully"));
     }
 
 }

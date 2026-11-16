@@ -21,6 +21,9 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secret;
 
+    @Value("${jwt.issuer}")
+    private String issuer;
+
     @Value("${jwt.access-token-expiration}")
     private Long accessTokenExpiration;
 
@@ -28,41 +31,129 @@ public class JwtUtil {
     private Long refreshTokenExpiration;
 
     private SecretKey getSigningKey() {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("JWT secret is not configured");
+        }
+
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+
+        if (keyBytes.length < 64) {
+            throw new IllegalStateException(
+                    "HS512 requires a secret of at least 64 UTF-8 bytes"
+            );
+        }
+
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
+    private void validateConfiguration() {
+        if (issuer == null || issuer.isBlank()) {
+            throw new IllegalStateException("jwt.issuer is not configured");
+        }
+
+        if (accessTokenExpiration == null || accessTokenExpiration <= 0) {
+            throw new IllegalStateException(
+                    "jwt.access-token-expiration must be positive"
+            );
+        }
+
+        if (refreshTokenExpiration == null || refreshTokenExpiration <= 0) {
+            throw new IllegalStateException(
+                    "jwt.refresh-token-expiration must be positive"
+            );
+        }
+    }
+
+    private List<String> getRoles(User user) {
+        if (user.getRoles() == null) {
+            return List.of();
+        }
+
+        return user.getRoles()
+                .stream()
+                .map(Role::getName)
+                .collect(Collectors.toList());
+    }
+
     public String generateAccessToken(User user) {
+        Objects.requireNonNull(user, "User must not be null");
+
+        if (user.getId() == null || user.getEmail() == null) {
+            throw new IllegalArgumentException(
+                    "User ID and email are required"
+            );
+        }
+
+        validateConfiguration();
+
+        long now = System.currentTimeMillis();
+
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getId().toString());
-        claims.put("roles", user.getRoles().stream()
-                .map(Role::getName)
-                .collect(Collectors.toList()));
+        claims.put("userType", "OWNER");
+        claims.put("roles", getRoles(user));
         claims.put("tokenType", "access");
 
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(user.getEmail())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
+                .setIssuer(issuer)
+                .setIssuedAt(new Date(now))
+                .setExpiration(new Date(now + accessTokenExpiration))
                 .setId(UUID.randomUUID().toString())
                 .signWith(getSigningKey(), SignatureAlgorithm.HS512)
                 .compact();
     }
 
     public String generateRefreshToken(User user) {
+        Objects.requireNonNull(user, "User must not be null");
+
+        if (user.getId() == null || user.getEmail() == null) {
+            throw new IllegalArgumentException(
+                    "User ID and email are required"
+            );
+        }
+
+        validateConfiguration();
+
+        long now = System.currentTimeMillis();
+
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", user.getId().toString());
+        claims.put("userType", "OWNER");
         claims.put("tokenType", "refresh");
 
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(user.getEmail())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + refreshTokenExpiration))
+                .setIssuer(issuer)
+                .setIssuedAt(new Date(now))
+                .setExpiration(new Date(now + refreshTokenExpiration))
                 .setId(UUID.randomUUID().toString())
                 .signWith(getSigningKey(), SignatureAlgorithm.HS512)
                 .compact();
+    }
+
+    private Claims extractAllClaims(String token) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("JWT token is empty");
+        }
+
+        validateConfiguration();
+
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .setAllowedClockSkewSeconds(30)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        // Auth Service locally trusts only its own tokens.
+        if (!issuer.equals(claims.getIssuer())) {
+            throw new JwtException("Untrusted JWT issuer");
+        }
+
+        return claims;
     }
 
     public String extractUsername(String token) {
@@ -70,63 +161,122 @@ public class JwtUtil {
     }
 
     public String extractUserId(String token) {
-        return extractClaim(token, claims -> claims.get("userId", String.class));
+        return extractClaim(
+                token,
+                claims -> claims.get("userId", String.class)
+        );
+    }
+
+    public String extractUserType(String token) {
+        return extractClaim(
+                token,
+                claims -> claims.get("userType", String.class)
+        );
+    }
+
+    public String extractIssuer(String token) {
+        return extractClaim(token, Claims::getIssuer);
     }
 
     public String extractTokenType(String token) {
-        return extractClaim(token, claims -> claims.get("tokenType", String.class));
+        return extractClaim(
+                token,
+                claims -> claims.get("tokenType", String.class)
+        );
     }
 
     public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }
 
-    public <T> T extractClaim(String token, java.util.function.Function<Claims, T> claimsResolver) {
-        final Claims claims = extractAllClaims(token);
-        return claimsResolver.apply(claims);
+    public Date extractIssuedAt(String token) {
+        return extractClaim(token, Claims::getIssuedAt);
     }
 
-    private Claims extractAllClaims(String token) {
-        try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
-                    .build()
-                    .parseClaimsJws(token)
-                    .getBody();
-        } catch (ExpiredJwtException e) {
-            log.warn("JWT token is expired: {}", e.getMessage());
-            throw e;
-        } catch (UnsupportedJwtException e) {
-            log.error("JWT token is unsupported: {}", e.getMessage());
-            throw e;
-        } catch (MalformedJwtException e) {
-            log.error("Invalid JWT token: {}", e.getMessage());
-            throw e;
-        } catch (IllegalArgumentException e) {
-            log.error("JWT claims string is empty: {}", e.getMessage());
-            throw e;
-        }
-    }
-
-    public Boolean isTokenExpired(String token) {
-        try {
-            return extractExpiration(token).before(new Date());
-        } catch (ExpiredJwtException e) {
-            return true;
-        }
+    public String extractTokenId(String token) {
+        return extractClaim(token, Claims::getId);
     }
 
     public List<String> extractRoles(String token) {
         Claims claims = extractAllClaims(token);
-        return claims.get("roles", List.class);
+
+        List<?> roles = claims.get("roles", List.class);
+
+        if (roles == null) {
+            return List.of();
+        }
+
+        return roles.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .collect(Collectors.toList());
     }
 
-    public Boolean validateToken(String token, String username) {
+    public <T> T extractClaim(
+            String token,
+            java.util.function.Function<Claims, T> resolver
+    ) {
+        return resolver.apply(extractAllClaims(token));
+    }
+
+    public boolean isAccessToken(String token) {
         try {
-            final String tokenUsername = extractUsername(token);
-            return (tokenUsername.equals(username) && !isTokenExpired(token));
-        } catch (Exception e) {
-            log.error("Token validation failed: {}", e.getMessage());
+            Claims claims = extractAllClaims(token);
+
+            return "access".equals(
+                    claims.get("tokenType", String.class)
+            ) && "OWNER".equals(
+                    claims.get("userType", String.class)
+            );
+
+        } catch (JwtException | IllegalArgumentException ex) {
+            log.debug("Access token validation failed: {}", ex.getMessage());
+            return false;
+        }
+    }
+
+    public boolean isRefreshToken(String token) {
+        try {
+            Claims claims = extractAllClaims(token);
+
+            return "refresh".equals(
+                    claims.get("tokenType", String.class)
+            ) && "OWNER".equals(
+                    claims.get("userType", String.class)
+            );
+
+        } catch (JwtException | IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    public boolean isTokenExpired(String token) {
+        try {
+            Date expiration = extractExpiration(token);
+            return expiration == null || !expiration.after(new Date());
+        } catch (JwtException | IllegalArgumentException ex) {
+            return true;
+        }
+    }
+
+    public boolean validateToken(String token, String username) {
+        try {
+            Claims claims = extractAllClaims(token);
+
+            return username != null
+                    && username.equalsIgnoreCase(claims.getSubject())
+                    && "OWNER".equals(
+                    claims.get("userType", String.class)
+            )
+                    && "access".equals(
+                    claims.get("tokenType", String.class)
+            )
+                    && claims.get("userId", String.class) != null
+                    && claims.getExpiration() != null
+                    && claims.getExpiration().after(new Date());
+
+        } catch (JwtException | IllegalArgumentException ex) {
+            log.debug("JWT validation failed: {}", ex.getMessage());
             return false;
         }
     }
@@ -138,10 +288,13 @@ public class JwtUtil {
     public Long getRemainingTimeBeforeExpiration(String token) {
         try {
             Date expiration = extractExpiration(token);
-            long now = Instant.now().toEpochMilli();
-            long expirationTime = expiration.getTime();
-            return (expirationTime - now) / 1000;
-        } catch (Exception e) {
+
+            return Math.max(
+                    0L,
+                    (expiration.getTime() - Instant.now().toEpochMilli()) / 1000
+            );
+
+        } catch (Exception ex) {
             return 0L;
         }
     }

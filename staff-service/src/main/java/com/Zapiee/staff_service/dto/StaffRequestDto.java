@@ -63,10 +63,6 @@ public class StaffRequestDto {
     @NotNull(message = "Staff shift is required")
     private StaffShift shift;
 
-    @NotNull(message = "Restaurant ID is required")
-    @Positive(message = "Restaurant ID must be greater than zero")
-    private Long restaurantId;
-
     @NotNull(message = "Working staff role is required")
     private WorkingStaffRole workingStaffRole;
 }

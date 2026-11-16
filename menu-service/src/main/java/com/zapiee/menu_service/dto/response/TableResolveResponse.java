@@ -14,6 +14,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class TableResolveResponse {
     private Long restaurantId;
+    private String name;
+    private Long tableNumber;
     private Long tableId;
     private String sessionToken;
     private LocalDateTime expireAt;

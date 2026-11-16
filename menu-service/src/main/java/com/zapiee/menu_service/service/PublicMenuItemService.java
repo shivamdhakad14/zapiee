@@ -39,13 +39,7 @@ public class PublicMenuItemService {
     public PublicMenuResponse getPublicMenu(TableResolveRequest request){
         TableResolveResponse tableResolveResponse;
         log.info("scan qr request received for restaurant : {}", request.getQrToken());
-        try{
-             tableResolveResponse = tableClient.resolveTable(request);
-             log.info("table resolve success : {}", tableResolveResponse.getRestaurantId());
-        } catch (RuntimeException e) {
-            log.error("table resolve failed");
-            throw new BusinessRuleViolationException(e.getMessage(), HttpStatus.BAD_REQUEST.toString());
-        }
+        tableResolveResponse = tableClient.resolveTable(request);
 
         // restaurantValidation.validateRestaurantExist(tableResolveResponse.getRestaurantId());
         log.info("table resolve response : {}", tableResolveResponse.getRestaurantId());
@@ -60,7 +54,9 @@ public class PublicMenuItemService {
 
         return PublicMenuResponse.builder()
                 .restaurantId(tableResolveResponse.getRestaurantId())
+                .restaurantName(tableResolveResponse.getName())
                 .tableId(tableResolveResponse.getTableId())
+                .tableNumber(tableResolveResponse.getTableNumber())
                 .sessionExpiresAt(tableResolveResponse.getExpireAt())
                 .sessionToken(tableResolveResponse.getSessionToken())
                 .categories(categoryResponses)

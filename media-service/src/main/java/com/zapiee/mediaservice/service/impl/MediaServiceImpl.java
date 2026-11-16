@@ -7,6 +7,7 @@ import com.zapiee.mediaservice.dto.MenuImagesUploadResponse;
 import com.zapiee.mediaservice.dto.RestaurantInformation;
 import com.zapiee.mediaservice.enums.MediaAssetStatus;
 import com.zapiee.mediaservice.enums.MediaOwnerType;
+import com.zapiee.mediaservice.enums.Status;
 import com.zapiee.mediaservice.exception.ForbiddenOperationException;
 import com.zapiee.mediaservice.exception.MediaNotFoundException;
 import com.zapiee.mediaservice.exception.ResourceNotFoundException;
@@ -46,7 +47,11 @@ public class MediaServiceImpl implements MediaService{
     @Override
     public MediaAsset upload(Long restaurantId, Long userId, MediaOwnerType ownerType, Long ownerId, MultipartFile file, String idempotencyKey) {
 
-//        RestaurantInformation restaurant = getRestaurant(restaurantId);
+        RestaurantInformation restaurant = getRestaurant(restaurantId);
+        if (!restaurant.getStatus().equals(Status.ACTIVE)){
+            throw new ForbiddenOperationException("you are not allowed to upload image without activation");
+        }
+
         fileValidator.validate(file);
 
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {

@@ -72,7 +72,6 @@ public class StaffService {
                 .orElseThrow(() ->
                         new org.springframework.security.authentication
                                 .BadCredentialsException("Invalid credentials"));
-
         if (staff.isCurrentlyLocked()) {
             throw new AccountLockedException(
                     "Account is temporarily locked");
@@ -107,7 +106,6 @@ public class StaffService {
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(jwtService.getAccessTokenExpirationInSeconds())
-                .restaurantId(staff.getRestaurantId())
                 .staffInfo(buildStaffInfo(staff))
                 .build();
     }
@@ -185,7 +183,6 @@ public class StaffService {
                 .refreshToken(token)
                 .tokenType("Bearer")
                 .expiresIn(jwtService.getAccessTokenExpirationInSeconds())
-                .restaurantId(staff.getRestaurantId())
                 .staffInfo(buildStaffInfo(staff))
                 .build();
     }
@@ -225,7 +222,7 @@ public class StaffService {
     }
 
     @Transactional
-    public StaffResponseDto createStaff(StaffRequestDto request) {
+    public StaffResponseDto createStaff(StaffRequestDto request, Long restId) {
 
         if (staffRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email already registered");
@@ -240,7 +237,7 @@ public class StaffService {
             throw new IllegalArgumentException("PINs do not match");
         }
 
-        Long restaurantId = getValidatedRestaurantId(request.getRestaurantId());
+        Long restaurantId = getValidatedRestaurantId(restId);
 
         StaffRole role = roleRepository.findByName("ROLE_STAFF")
                 .orElseThrow(() ->
@@ -409,7 +406,6 @@ public class StaffService {
         staff.setStatus(dto.getStatus());
         staff.setShift(dto.getShift());
         staff.setWorkingStaffRole(dto.getWorkingStaffRole());
-        staff.setRestaurantId(dto.getRestaurantId());
         staff.setUpdatedAt(LocalDateTime.now());
 
         // Never update the PIN as a side effect of profile editing.
@@ -483,7 +479,6 @@ public class StaffService {
         staff.setRoles(Set.of(role));
         staff.setStatus(dto.getStatus());
         staff.setShift(dto.getShift());
-        staff.setRestaurantId(dto.getRestaurantId());
 
         return staff;
     }

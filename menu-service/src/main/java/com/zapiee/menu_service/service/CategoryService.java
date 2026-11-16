@@ -1,17 +1,21 @@
 package com.zapiee.menu_service.service;
 
 import com.zapiee.menu_service.dto.request.CreateCategoryRequest;
+import com.zapiee.menu_service.dto.request.UpdateCategoryRequest;
 import com.zapiee.menu_service.dto.response.CategoryResponse;
 import com.zapiee.menu_service.entity.Category;
+import com.zapiee.menu_service.exception.BusinessRuleViolationException;
 import com.zapiee.menu_service.exception.DuplicateCategoryException;
 import com.zapiee.menu_service.exception.ResourceNotFoundException;
 import com.zapiee.menu_service.mapper.CategoryMapper;
 import com.zapiee.menu_service.repository.CategoryRepository;
+import com.zapiee.menu_service.repository.MenuItemRepository;
 import com.zapiee.menu_service.validation.CategoryValidationService;
 import com.zapiee.menu_service.validation.RestaurantValidation;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -25,6 +29,7 @@ public class CategoryService {
     private final CategoryValidationService categoryValidationService;
     private final CategoryMapper categoryMapper;
     private final RestaurantValidation restaurantValidation;
+    private final MenuItemRepository menuItemRepository;
 
     @Transactional
     public CategoryResponse createCategory(CreateCategoryRequest request, Long restaurantId) {
@@ -62,6 +67,43 @@ public class CategoryService {
         Category category = categoryRepository.findByIdAndRestaurantIdAndIsDeletedFalse(categoryId, restaurantId)
                 .orElseThrow(() -> new ResourceNotFoundException("category not found"));
         return toResponseWithItemCount(category);
+    }
+
+    @Transactional
+    public CategoryResponse updateCategory(UpdateCategoryRequest request, Long restaurantId){
+
+        Category category = categoryRepository.findByIdAndRestaurantIdAndIsDeletedFalse(request.getCategoryId(), restaurantId)
+                .orElseThrow(() -> new ResourceNotFoundException("category not found"));
+
+        boolean isExist = categoryRepository.existsByRestaurantIdAndNameIgnoreCaseAndIsDeletedFalse(restaurantId, request.getName().trim());
+
+        if(isExist){
+            throw new DuplicateCategoryException(
+                    "A category named '" + request.getName() + "' already exists for this restaurant"
+            );
+        }
+
+        category.setName(request.getName());
+        category.setDescription(request.getDescription());
+        category.setImageUrl(category.getImageUrl() == null ? request.getImageUrl() : category.getImageUrl());
+        category.setDisplayOrder(request.getDisplayOrder());
+
+        Category save = categoryRepository.save(category);
+        return toResponseWithItemCount(category);
+    }
+
+    public void deleteCategory(Long categoryId, Long restaurantId){
+
+        Category category = categoryRepository.findByIdAndRestaurantIdAndIsDeletedFalse(categoryId, restaurantId)
+                .orElseThrow(() -> new ResourceNotFoundException("category not found"));
+
+        boolean isExist = menuItemRepository.existsByRestaurantIdAndCategoryIdAndIsDeletedFalse(restaurantId, categoryId);
+
+        if(isExist) {
+            throw new BusinessRuleViolationException("items exist in this category so can't " +
+                    "delete category", HttpStatus.BAD_REQUEST.toString());
+        }
+        categoryRepository.delete(category);
     }
 
     private CategoryResponse toResponseWithItemCount(Category c) {

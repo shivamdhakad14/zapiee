@@ -19,6 +19,8 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
     boolean existsByCategoryIdAndNameIgnoreCaseAndIsDeletedFalseAndIdNot(
             Long categoryId, String name, Long excludeId);
 
+    boolean existsByRestaurantIdAndCategoryIdAndIsDeletedFalse(Long restaurantId, Long categoryId);
+
     long countByCategoryIdAndIsDeletedFalse(Long categoryId);
 
     long countByRestaurantIdAndIsDeletedFalse(Long restaurantId);

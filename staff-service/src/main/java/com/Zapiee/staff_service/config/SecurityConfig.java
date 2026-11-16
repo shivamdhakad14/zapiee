@@ -1,22 +1,16 @@
 package com.Zapiee.staff_service.config;
 
 import com.Zapiee.staff_service.filter.JwtAuthenticationFilter;
-import com.Zapiee.staff_service.service.CustomUserDetailsService;
-
-import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
-
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,83 +25,61 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    private final CustomUserDetailsService userDetailsService;
     private static final String[] PUBLIC_URLS = {
-            "/api/v1/staffs/register", "/api/v1/staffs/login", "/api/v1/staffs/refresh",
-            "/api/v1/staffs/pin-reset/request", "/api/v1/staffs/pin-reset/confirm",
-            "/api/v1/staffs/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
-            "/actuator/health", "/actuator/info"
+            "/api/v1/staffs/login",
+            "/api/v1/staffs/pin-reset/request",
+            "/api/v1/staffs/pin-reset/confirm",
+            "/api/v1/staffs/health",
+            "/v3/api-docs/**",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/actuator/health",
+            "/actuator/info"
     };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(
-            HttpSecurity http,
-            AuthenticationProvider authenticationProvider
-    ) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+            throws Exception {
 
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
                         )
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .dispatcherTypeMatchers(
-                                DispatcherType.ERROR,
-                                DispatcherType.FORWARD
-                        ).permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(PUBLIC_URLS).permitAll()
+
+                        // Owner-only staff account creation.
                         .requestMatchers(
-                                PUBLIC_URLS
-                        ).permitAll()
+                                HttpMethod.POST,
+                                "/api/v1/staffs/register"
+                        ).hasAuthority("ROLE_OWNER")
+
+                        // All other staff endpoints require authentication.
                         .anyRequest().authenticated()
                 )
-                .authenticationProvider(authenticationProvider)
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
                 )
-                .formLogin(form -> form.disable())
-                .httpBasic(basic -> basic.disable());
+                .formLogin(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable);
 
         return http.build();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public AuthenticationProvider authenticationProvider(
-            PasswordEncoder passwordEncoder
-    ) {
-        DaoAuthenticationProvider provider =
-                new DaoAuthenticationProvider(userDetailsService);
-
-        provider.setPasswordEncoder(passwordEncoder);
-
-        return provider;
     }
 
     @Bean
     public AuthenticationManager authenticationManager(
             AuthenticationConfiguration config
     ) throws Exception {
-
         return config.getAuthenticationManager();
     }
 
     @Bean
-    public FilterRegistrationBean<JwtAuthenticationFilter>
-    disableJwtFilterServletRegistration() {
-
-        FilterRegistrationBean<JwtAuthenticationFilter> registration =
-                new FilterRegistrationBean<>(jwtAuthenticationFilter);
-
-        // Prevent the filter from running twice
-        registration.setEnabled(false);
-
-        return registration;
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12);
     }
 }

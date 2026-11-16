@@ -26,43 +26,30 @@ public class StaffController {
     private final StaffService service;
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<StaffResponseDto>> createStaff(
+    public ResponseEntity<ApiResponse<StaffResponseDto>> createStaff(@RequestHeader("X-Restaurant-Id") Long restaurantId,
            @Valid @RequestBody StaffRequestDto request) {
 
         log.info("Staff registration requested");
 
-        StaffResponseDto response = service.createStaff(request);
+        StaffResponseDto response = service.createStaff(request, restaurantId);
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.created(
-                        "Staff account created successfully", response));
+                .body(ApiResponse.created(response,
+                        "Staff account created successfully"));
     }
 
-//    @PostMapping("/login")
-//    public ResponseEntity<AuthResponse> loginWithPin(
-//            @Valid @RequestBody LoginIdentifierRequestDto request) {
-//
-//        return ResponseEntity.ok(service.loginWithPin(request));
-//    }
-
     @PostMapping("/login")
-    public ResponseEntity<?> loginWithPin(
+    public ResponseEntity<ApiResponse<AuthResponse>> loginWithPin(
            @Valid @RequestBody LoginIdentifierRequestDto request) {
-
-        log.info("Login endpoint reached");
         log.info("Request body is null: {}", request == null);
 
-        if (request == null) {
-            return ResponseEntity.badRequest().build();
-        }
-
         AuthResponse response = service.loginWithPin(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/logout")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<MessageResponse> logout(
+    public ResponseEntity<ApiResponse<Void>> logout(
             @RequestHeader("Authorization") String authHeader,
             @RequestBody(required = false) RefreshTokenRequest request) {
 
@@ -75,24 +62,24 @@ public class StaffController {
         String refreshToken = request == null
                 ? null : request.getRefreshToken();
 
-        return ResponseEntity.ok(
-                service.logout(refreshToken, accessToken));
+        service.logout(refreshToken, accessToken);
+
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @GetMapping
-    public ResponseEntity<StaffResponseDto> getStaffByName(
+    public ResponseEntity<ApiResponse<StaffResponseDto>> getStaffByName(
             @RequestParam @NotBlank String name) {
-
-        return ResponseEntity.ok(service.getStaffByName(name));
+        StaffResponseDto staffByName = service.getStaffByName(name);
+        return ResponseEntity.ok(ApiResponse.success(staffByName));
     }
 
-    @GetMapping("/restaurant/{restaurantId}")
+    @GetMapping("/restaurant")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
-    public ResponseEntity<List<StaffResponseDto>> getAllByRestaurant(
-            @PathVariable Long restaurantId) {
-
-        return ResponseEntity.ok(
-                service.getStaffByRestaurant(restaurantId));
+    public ResponseEntity<ApiResponse<List<StaffResponseDto>>> getAllByRestaurant(
+            @RequestHeader("X-Restaurant-Id") Long restaurantId) {
+        List<StaffResponseDto> staffByRestaurant = service.getStaffByRestaurant(restaurantId);
+        return ResponseEntity.ok(ApiResponse.success(staffByRestaurant));
     }
 
     @PostMapping("/password-reset/request")
@@ -132,18 +119,18 @@ public class StaffController {
 
     @PutMapping("/update/{id}")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
-    public ResponseEntity<StaffResponseDto> updateStaff(
+    public ResponseEntity<ApiResponse<StaffResponseDto>> updateStaff(
             @PathVariable Long id,
             @Valid @RequestBody StaffRequestDto request) {
-
-        return ResponseEntity.ok(service.updateStaff(id, request));
+        StaffResponseDto staffResponseDto = service.updateStaff(id, request);
+        return ResponseEntity.ok(ApiResponse.success(staffResponseDto));
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refreshToken(
+    public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
             @Valid @RequestBody RefreshTokenRequest request) {
-
-        return ResponseEntity.ok(service.refreshToken(request));
+        AuthResponse authResponse = service.refreshToken(request);
+        return ResponseEntity.ok(ApiResponse.success(authResponse));
     }
 
     @GetMapping("/health")

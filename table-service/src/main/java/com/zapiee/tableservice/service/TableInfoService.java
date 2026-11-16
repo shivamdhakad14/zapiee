@@ -66,18 +66,18 @@ public class TableInfoService {
 
         Double allowedRadius = locationProperties.getAllowedRadiusMeters();
 
-        if (allowedRadius == null || allowedRadius.compareTo(distanceMeters) <= 0) {
-            throw new BadRequestException("Location validation radius is not configured correctly.");
-        }
+//        if (allowedRadius == null || allowedRadius.compareTo(distanceMeters) <= 0) {
+//            throw new BadRequestException("Location validation radius is not configured correctly.");
+//        }
 
-        if (distanceMeters.compareTo(allowedRadius) > 0) {
-
-            log.warn("Table resolve rejected due to customer location. " +
-                            "restaurantId={}, tableId={}, distanceMeters={}, allowedRadius={}",
-                    restaurantId, table.getId(), distanceMeters, allowedRadius);
-
-            throw new BadRequestException("You must be near the restaurant to access this table.");
-        }
+//        if (distanceMeters.compareTo(allowedRadius) > 0) {
+//
+//            log.warn("Table resolve rejected due to customer location. " +
+//                            "restaurantId={}, tableId={}, distanceMeters={}, allowedRadius={}",
+//                    restaurantId, table.getId(), distanceMeters, allowedRadius);
+//
+//            throw new BadRequestException("You must be near the restaurant to access this table.");
+//        }
 
         TableResolveResponse sessionResponse = tableSessionService.createSession(restaurantId, table.getId(), table.getTableNumber());
 
@@ -91,6 +91,8 @@ public class TableInfoService {
 
         return TableResolveResponse.builder()
                 .restaurantId(restaurantId)
+                .name(restaurant.getName())
+                .tableNumber(table.getTableNumber())
                 .tableId(table.getId())
                 .sessionToken(sessionResponse.getSessionToken())
                 .expireAt(sessionResponse.getExpireAt())

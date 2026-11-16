@@ -29,7 +29,7 @@ public class MediaAsset {
     @Column(name = "owner_type", nullable = false, length = 32)
     private MediaOwnerType ownerType;
 
-    @Column(name = "owner_id", nullable = false)
+    @Column(name = "owner_id")
     private Long ownerId;
 
     @Enumerated(EnumType.STRING)

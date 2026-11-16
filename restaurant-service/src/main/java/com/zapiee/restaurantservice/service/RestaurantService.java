@@ -448,6 +448,7 @@ public class RestaurantService {
                 .restaurantId(restaurant.getId())
                 .latitude(address != null ? address.getLatitude() : null)
                 .longitude(address != null ? address.getLongitude() : null)
+                .name(restaurant.getBusinessName())
                 .build();
     }
 

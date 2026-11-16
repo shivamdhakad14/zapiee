@@ -70,6 +70,9 @@ public class CloudinaryStorageService implements StorageService {
     }
 
     private String buildPublicId(Long ownerId) {
+        if(ownerId == null) {
+            return UUID.randomUUID().toString().substring(0, 8);
+        }
         return ownerId + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
 

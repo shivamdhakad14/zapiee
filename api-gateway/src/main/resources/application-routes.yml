@@ -90,6 +90,22 @@ spring:
                 redis-rate-limiter.requestedTokens: 1
                 key-resolver: "#{@userKeyResolver}"
 
+        - id: order-payment-api
+          uri: lb://PAYMENT-SERVICE
+          predicates:
+            - Path=/api/v1/order-payments/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: paymentServiceFallback
+                fallbackUri: forward:/fallback/payment
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+
         - id: table-api
           uri: lb://TABLE-SERVICE
           predicates:
@@ -98,12 +114,18 @@ spring:
         - id: staff-api
           uri: lb://STAFF-SERVICE
           predicates:
-            - Path=/api/staffs/**
+            - Path=/api/v1/staffs/**
           filters:
             - name: CircuitBreaker
               args:
                 name: staffServiceFallback
                 fallbackUri: forward:/fallback/staff
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
 
         - id: notification-api
           uri: lb://NOTIFICATION-SERVICE

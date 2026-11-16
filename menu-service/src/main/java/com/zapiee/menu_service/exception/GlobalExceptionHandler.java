@@ -2,6 +2,7 @@ package com.zapiee.menu_service.exception;
 
 
 import com.zapiee.menu_service.dto.response.ApiResponse;
+import feign.FeignException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import net.bytebuddy.asm.Advice;
@@ -39,6 +40,27 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest().body(body);
     }
+
+        @ExceptionHandler(FeignException.class)
+        public ResponseEntity<ApiResponse<Void>> handleFeignException(FeignException ex, HttpServletRequest request) {
+
+            int statusCode = ex.status();
+            HttpStatus status = HttpStatus.resolve(statusCode);
+
+            if (status == null || statusCode < 400) {
+                status = HttpStatus.BAD_GATEWAY;
+            }
+
+            String responseBody = ex.contentUTF8();
+
+            HttpHeaders headers = new HttpHeaders();
+
+            ApiResponse<Void> body = ApiResponse.<Void>error(responseBody, status, status.toString())
+                    .withTraceId(traceId())
+                    .withPath(request.getRequestURI());
+
+            return ResponseEntity.status(status).body(body);
+        }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
     public ResponseEntity<ApiResponse<Void>> handleMalformedRequest(
